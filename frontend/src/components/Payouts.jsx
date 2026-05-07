@@ -61,7 +61,7 @@ export default function Payouts({ refreshKey, onChange }) {
                 {farmers.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
               </Select>
             </Field>
-            <Field label="Amount (USDC)">
+            <Field label="Amount (XLM)">
               <Input type="number" min="0" step="0.01" placeholder="0.00"
                      value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required />
             </Field>

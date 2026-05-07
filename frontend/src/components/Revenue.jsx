@@ -46,7 +46,7 @@ export default function Revenue({ refreshKey, onChange }) {
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </Select>
             </Field>
-            <Field label="Amount (USDC)">
+            <Field label="Amount (XLM)">
               <Input type="number" min="0" step="0.01" placeholder="0.00"
                      value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} required />
             </Field>

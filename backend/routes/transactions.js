@@ -3,7 +3,7 @@ import Transaction from '../models/Transaction.js';
 import Investor from '../models/Investor.js';
 import Wallet from '../models/Wallet.js';
 import Project from '../models/Project.js';
-import { simulateTransfer } from '../services/stellar.js';
+import { transferXLM, getLiveBalance, ASSET, NETWORK } from '../services/stellar.js';
 import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
@@ -16,7 +16,7 @@ r.get('/', asyncH(async (req, res) => {
   res.json(txs.map(t => t.toJSON()));
 }));
 
-// Investor → Treasury
+// Investor → Treasury: real Stellar testnet payment.
 r.post('/invest', asyncH(async (req, res) => {
   const { investorId, amount } = req.body || {};
   const value = Number(amount);
@@ -29,28 +29,59 @@ r.post('/invest', asyncH(async (req, res) => {
   const treasury = await getTreasury();
   if (!investorWallet || !treasury) return res.status(500).json({ error: 'wallets not initialised' });
 
+  let result;
   try {
-    const meta = simulateTransfer({ from: investorWallet, to: treasury, amount: value });
-    await investorWallet.save();
-    await treasury.save();
-    const tx = await Transaction.create({
+    result = await transferXLM({
+      fromSecret: investorWallet.secret,
+      toPublicKey: treasury.publicKey,
+      amount: value
+    });
+  } catch (e) {
+    const failed = await Transaction.create({
       stage: 'investment',
       amount: value,
-      asset: 'USDC',
+      asset: ASSET,
       senderId: investorWallet._id,
       senderLabel: investorWallet.label,
       receiverId: treasury._id,
       receiverLabel: treasury.label,
       projectId: null,
-      txHash: meta.txHash
+      txHash: '',
+      status: 'failed',
+      network: NETWORK,
+      errorCode: e.code || ''
     });
-    res.status(201).json(tx.toJSON());
-  } catch (e) {
-    res.status(400).json({ error: e.message });
+    return res.status(400).json({ error: e.message, transaction: failed.toJSON() });
   }
+
+  // Refresh both balances from the network.
+  const [investorLive, treasuryLive] = await Promise.all([
+    getLiveBalance(investorWallet.publicKey),
+    getLiveBalance(treasury.publicKey)
+  ]);
+  investorWallet.balance = investorLive;
+  treasury.balance = treasuryLive;
+  await Promise.all([investorWallet.save(), treasury.save()]);
+
+  const tx = await Transaction.create({
+    stage: 'investment',
+    amount: value,
+    asset: ASSET,
+    senderId: investorWallet._id,
+    senderLabel: investorWallet.label,
+    receiverId: treasury._id,
+    receiverLabel: treasury.label,
+    projectId: null,
+    txHash: result.txHash,
+    ledger: result.ledger,
+    status: result.status,
+    network: result.network
+  });
+  res.status(201).json(tx.toJSON());
 }));
 
-// Treasury → Project allocation (no real wallet — project balance is tracked on the project record)
+// Treasury → Project allocation. Projects don't have on-chain wallets in this
+// app — allocations are internal book-keeping against treasury balance.
 r.post('/allocate', asyncH(async (req, res) => {
   const { projectId, amount } = req.body || {};
   const value = Number(amount);
@@ -70,13 +101,15 @@ r.post('/allocate', asyncH(async (req, res) => {
   const tx = await Transaction.create({
     stage: 'allocation',
     amount: value,
-    asset: 'USDC',
+    asset: ASSET,
     senderId: treasury._id,
     senderLabel: treasury.label,
     receiverId: project._id,
     receiverLabel: `Project: ${project.name}`,
     projectId: project._id,
-    txHash: 'mock_alloc_' + Math.random().toString(36).slice(2, 12)
+    txHash: 'internal_alloc_' + Math.random().toString(36).slice(2, 12),
+    status: 'success',
+    network: 'internal'
   });
   res.status(201).json(tx.toJSON());
 }));

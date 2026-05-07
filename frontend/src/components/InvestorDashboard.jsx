@@ -74,7 +74,7 @@ export default function InvestorDashboard({ refreshKey, forcedInvestorId = null,
           </Cards>
 
           <Cards cols={3}>
-            <StatCard label="Wallet Balance" value={fmt(summary.wallet?.balance)} sub="USDC available" />
+            <StatCard label="Wallet Balance" value={fmt(summary.wallet?.balance)} sub="XLM on testnet" />
             <StatCard label="Projects Invested In" value={summary.totals.projectsCount} />
             <StatCard label="Investment Tx Count" value={summary.totals.transactionsCount} />
           </Cards>

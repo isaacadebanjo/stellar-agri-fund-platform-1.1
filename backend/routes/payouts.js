@@ -45,22 +45,26 @@ r.post('/', asyncH(async (req, res) => {
     farmerName: farmer.name,
     farmerWallet: farmer.walletId || '',
     amount: value,
-    asset: 'USDC',
+    asset: 'XLM',
     note: note || '',
     timestamp
   });
 
-  // Mirror into the unified transactions ledger so the dashboard tells the full story.
+  // Mirror into the unified transactions ledger so the dashboard tells the
+  // full story. Farmers don't have on-chain wallets here, so this stays
+  // internal book-keeping (no Stellar submission).
   await Transaction.create({
     stage: 'payout',
     amount: value,
-    asset: 'USDC',
+    asset: 'XLM',
     senderId: project._id,
     senderLabel: `Project: ${project.name}`,
     receiverId: farmer._id,
     receiverLabel: `Farmer: ${farmer.name}`,
     projectId: project._id,
-    txHash: 'mock_payout_' + Math.random().toString(36).slice(2, 12),
+    txHash: 'internal_payout_' + Math.random().toString(36).slice(2, 12),
+    status: 'success',
+    network: 'internal',
     timestamp
   });
 

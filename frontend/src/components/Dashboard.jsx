@@ -31,7 +31,7 @@ export default function Dashboard({ refreshKey }) {
     <>
       <Cards cols={4}>
         <StatCard label="Total Received" value={fmt(data.totals.received)} sub="from investors" />
-        <StatCard label="Treasury Balance" value={fmt(data.totals.treasuryBalance)} sub="USDC on hand" accent="LIVE" />
+        <StatCard label="Treasury Balance" value={fmt(data.totals.treasuryBalance)} sub="XLM on hand (live)" accent="LIVE" />
         <StatCard label="Allocated to Projects" value={fmt(data.totals.allocated)} sub="across all crops" />
         <StatCard label="Paid Out to Farmers" value={fmt(data.totals.paidOut)} sub="cumulative" />
       </Cards>
@@ -80,7 +80,7 @@ export default function Dashboard({ refreshKey }) {
             <span className="stat-label">Balance</span>
           </div>
           <div className="stat-value">{fmt(data.treasury.balance)}</div>
-          <div className="stat-sub">USDC currently held</div>
+          <div className="stat-sub">XLM currently held on testnet</div>
         </Section>
       </div>
 

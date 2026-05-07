@@ -36,7 +36,7 @@ export default function Projects({ refreshKey, onChange }) {
   }
 
   async function allocate(id) {
-    const amount = prompt('Allocate how much (USDC) from treasury?');
+    const amount = prompt('Allocate how much XLM from treasury (internal book-keeping)?');
     if (!amount) return;
     try {
       await api.transactions.allocate(id, Number(amount));

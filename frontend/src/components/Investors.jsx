@@ -27,7 +27,7 @@ export default function Investors({ refreshKey, onChange }) {
   }
 
   async function fund(id) {
-    const amount = prompt('Top up wallet by how much (USDC)?');
+    const amount = prompt('Top up wallet by how much XLM (sent from treasury via testnet)?');
     if (!amount) return;
     try {
       await api.investors.fund(id, Number(amount));

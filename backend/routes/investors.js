@@ -4,7 +4,8 @@ import Wallet from '../models/Wallet.js';
 import Transaction from '../models/Transaction.js';
 import Distribution from '../models/Distribution.js';
 import Project from '../models/Project.js';
-import { createWallet } from '../services/stellar.js';
+import { createFundedWallet, transferXLM, getLiveBalance, ASSET, NETWORK } from '../services/stellar.js';
+import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
 import { requireRole, requireSelfOrAdmin } from '../middleware/auth.js';
 
@@ -23,13 +24,15 @@ r.post('/', requireRole('admin'), asyncH(async (req, res) => {
   const { name, email } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name required' });
 
-  const { publicKey, secret } = createWallet();
+  // Real Stellar testnet: friendbot funds the new wallet with ~10000 XLM
+  // so it can transact immediately. Network call — takes a few seconds.
+  const funded = await createFundedWallet();
   const wallet = await Wallet.create({
     label: `${name} Wallet`,
-    publicKey,
-    secret,
+    publicKey: funded.publicKey,
+    secret: funded.secret,
     type: 'investor',
-    balance: 0
+    balance: funded.balance
   });
   const investor = await Investor.create({
     name,
@@ -99,21 +102,56 @@ r.get('/:id/summary', requireSelfOrAdmin(req => req.params.id), asyncH(async (re
   });
 }));
 
-// Top up an investor wallet (simulates the investor depositing USDC into their own wallet).
+// Top up an investor wallet by sending real XLM from the treasury on testnet.
+// Records a Transaction with the real ledger hash + status.
 r.post('/:id/fund', requireRole('admin'), asyncH(async (req, res) => {
   const investor = await Investor.findById(req.params.id);
   if (!investor) return res.status(404).json({ error: 'investor not found' });
   const amount = Number(req.body?.amount);
   if (!amount || amount <= 0) return res.status(400).json({ error: 'amount > 0 required' });
 
-  const wallet = await Wallet.findByIdAndUpdate(
-    investor.walletId,
-    { $inc: { balance: amount } },
-    { new: true }
-  );
-  if (wallet) wallet.balance = +wallet.balance.toFixed(2);
-  await wallet?.save();
-  res.json({ wallet: wallet?.toJSON() });
+  const investorWallet = await Wallet.findById(investor.walletId);
+  const treasury = await getTreasury();
+  if (!investorWallet || !treasury) {
+    return res.status(500).json({ error: 'wallets not initialised' });
+  }
+
+  let result;
+  try {
+    result = await transferXLM({
+      fromSecret: treasury.secret,
+      toPublicKey: investorWallet.publicKey,
+      amount
+    });
+  } catch (e) {
+    // Persist a failed funding tx so admins can see it in the ledger.
+    await Transaction.create({
+      stage: 'investment', // closest existing bucket; treasury → investor top-up
+      amount,
+      asset: ASSET,
+      senderId: treasury._id,
+      senderLabel: treasury.label,
+      receiverId: investorWallet._id,
+      receiverLabel: investorWallet.label,
+      projectId: null,
+      txHash: '',
+      status: 'failed',
+      network: NETWORK,
+      errorCode: e.code || ''
+    });
+    return res.status(400).json({ error: e.message });
+  }
+
+  // Refresh both balances from Horizon (single source of truth).
+  const [treasuryLive, investorLive] = await Promise.all([
+    getLiveBalance(treasury.publicKey),
+    getLiveBalance(investorWallet.publicKey)
+  ]);
+  treasury.balance = treasuryLive;
+  investorWallet.balance = investorLive;
+  await Promise.all([treasury.save(), investorWallet.save()]);
+
+  res.json({ wallet: investorWallet.toJSON(), txHash: result.txHash, status: result.status });
 }));
 
 export default r;
