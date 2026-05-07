@@ -8,6 +8,7 @@ import { createFundedWallet, transferXLM, getLiveBalance, ASSET, NETWORK } from 
 import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
 import { requireRole, requireSelfOrAdmin } from '../middleware/auth.js';
+import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
 
@@ -39,6 +40,24 @@ r.post('/', requireRole('admin'), asyncH(async (req, res) => {
     email: email || '',
     walletId: wallet._id
   });
+
+  // Log activity
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.CREATE_INVESTOR,
+    entityType: EntityTypes.INVESTOR,
+    entityId: investor._id.toString(),
+    description: `Created investor "${name}" with wallet ${wallet.publicKey.slice(0, 8)}...`,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      investorName: name,
+      email: email || null,
+      walletId: wallet._id.toString(),
+      publicKey: wallet.publicKey
+    }
+  });
+
   res.status(201).json({ ...investor.toJSON(), wallet: wallet.toJSON() });
 }));
 
@@ -139,6 +158,22 @@ r.post('/:id/fund', requireRole('admin'), asyncH(async (req, res) => {
       network: NETWORK,
       errorCode: e.code || ''
     });
+
+    // Log failed funding attempt
+    logActivity({
+      userId: req.user?.id,
+      userRole: req.user?.role || 'system',
+      actionType: ActivityTypes.FUND_WALLET,
+      entityType: EntityTypes.WALLET,
+      entityId: investorWallet._id.toString(),
+      description: `Failed to fund investor wallet - ${e.message}`,
+      status: ActivityStatus.FAILED,
+      metadata: {
+        amount,
+        error: e.message
+      }
+    });
+
     return res.status(400).json({ error: e.message });
   }
 
@@ -150,6 +185,24 @@ r.post('/:id/fund', requireRole('admin'), asyncH(async (req, res) => {
   treasury.balance = treasuryLive;
   investorWallet.balance = investorLive;
   await Promise.all([treasury.save(), investorWallet.save()]);
+
+  // Log successful funding
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.FUND_WALLET,
+    entityType: EntityTypes.WALLET,
+    entityId: investorWallet._id.toString(),
+    description: `Funded investor wallet with ${amount} XLM`,
+    txHash: result.txHash,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      amount,
+      investorId: investor._id.toString(),
+      investorName: investor.name,
+      newBalance: investorWallet.balance
+    }
+  });
 
   res.json({ wallet: investorWallet.toJSON(), txHash: result.txHash, status: result.status });
 }));

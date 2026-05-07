@@ -3,6 +3,7 @@ import Revenue from '../models/Revenue.js';
 import Project from '../models/Project.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
 r.use(requireRole('admin'));
@@ -33,6 +34,23 @@ r.post('/', asyncH(async (req, res) => {
     amount: value,
     source: (source || '').trim()
   });
+
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.REVENUE_ENTRY,
+    entityType: EntityTypes.REVENUE,
+    entityId: record._id.toString(),
+    description: `Revenue entry of ${value} XLM for project "${project.name}" from source "${source || 'N/A'}"`,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      amount: value,
+      source: source || null,
+      projectId: project._id.toString(),
+      projectName: project.name
+    }
+  });
+
   res.status(201).json({ ...record.toJSON(), projectName: project.name });
 }));
 

@@ -5,6 +5,7 @@ import Farmer from '../models/Farmer.js';
 import Transaction from '../models/Transaction.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
 r.use(requireRole('admin'));
@@ -66,6 +67,22 @@ r.post('/', asyncH(async (req, res) => {
     status: 'success',
     network: 'internal',
     timestamp
+  });
+
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.PAYOUT,
+    entityType: EntityTypes.PAYOUT,
+    entityId: payout._id.toString(),
+    description: `Payout of ${value} XLM to farmer "${farmer.name}" from project "${project.name}"`,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      amount: value,
+      farmerName: farmer.name,
+      projectId: project._id.toString(),
+      projectName: project.name
+    }
   });
 
   res.status(201).json(payout.toJSON());

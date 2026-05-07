@@ -4,6 +4,7 @@ import Project from '../models/Project.js';
 import Payout from '../models/Payout.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
 r.use(requireRole('admin'));
@@ -53,7 +54,53 @@ r.post('/', asyncH(async (req, res) => {
   // First-load enrich (no payouts yet)
   const projects = await Project.find({ _id: { $in: farmer.assignedProjects } }).lean();
   const projectsById = new Map(projects.map(p => [p._id, p]));
-  res.status(201).json(await enrich(farmer.toObject(), [], projectsById));
+  const enriched = await enrich(farmer.toObject(), [], projectsById);
+
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.CREATE_FARMER,
+    entityType: EntityTypes.FARMER,
+    entityId: farmer._id.toString(),
+    description: `Farmer "${farmer.name}" created with wallet ID "${farmer.walletId || 'N/A'}"`,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      farmerName: farmer.name,
+      walletId: farmer.walletId,
+      assignedProjectCount: farmer.assignedProjects.length,
+      assignedProjectIds: farmer.assignedProjects.map(p => p.toString())
+    }
+  });
+
+  res.status(201).json(enriched);
+}));
+
+r.delete('/:id', asyncH(async (req, res) => {
+  const farmer = await Farmer.findById(req.params.id);
+  if (!farmer) return res.status(404).json({ error: 'farmer not found' });
+
+  const farmerName = farmer.name;
+  const farmerId = farmer._id.toString();
+
+  await Farmer.deleteOne({ _id: farmer._id });
+
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.DELETE_FARMER,
+    entityType: EntityTypes.FARMER,
+    entityId: farmerId,
+    description: `Farmer "${farmerName}" deleted`,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      farmerName,
+      walletId: farmer.walletId,
+      assignedProjectCount: farmer.assignedProjects?.length || 0,
+      assignedProjectIds: (farmer.assignedProjects || []).map(p => p.toString())
+    }
+  });
+
+  res.json({ message: 'Farmer deleted successfully' });
 }));
 
 export default r;

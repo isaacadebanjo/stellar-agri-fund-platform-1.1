@@ -6,6 +6,7 @@ import Revenue from '../models/Revenue.js';
 import Transaction from '../models/Transaction.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
 
@@ -153,6 +154,28 @@ r.post('/generate', requireRole('admin'), asyncH(async (req, res) => {
 
   const enriched = await Promise.all(created.map(enrichDistribution));
 
+  created.forEach((dist, idx) => {
+    logActivity({
+      userId: req.user?.id,
+      userRole: req.user?.role || 'system',
+      actionType: ActivityTypes.DISTRIBUTION_GENERATED,
+      entityType: EntityTypes.DISTRIBUTION,
+      entityId: dist._id.toString(),
+      description: `Distribution generated for project "${project.name}" - ${dist.amount} XLM allocated to investor`,
+      status: ActivityStatus.SUCCESS,
+      metadata: {
+        projectId: project._id.toString(),
+        projectName: project.name,
+        investorId: dist.investorId.toString(),
+        amount: dist.amount,
+        sharePercent: dist.sharePercent,
+        grossProfit: +grossProfit.toFixed(2),
+        netProfit,
+        platformFee
+      }
+    });
+  });
+
   res.status(201).json({
     projectId: project._id,
     projectName: project.name,
@@ -171,6 +194,31 @@ r.post('/:id/mark-paid', requireRole('admin'), asyncH(async (req, res) => {
     { new: true }
   );
   if (!dist) return res.status(404).json({ error: 'distribution not found' });
+
+  const [inv, proj] = await Promise.all([
+    Investor.findById(dist.investorId).lean(),
+    Project.findById(dist.projectId).lean()
+  ]);
+
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.DISTRIBUTION_PAID,
+    entityType: EntityTypes.DISTRIBUTION,
+    entityId: dist._id.toString(),
+    description: `Distribution of ${dist.amount} XLM marked as paid to investor "${inv?.name || 'Unknown'}" for project "${proj?.name || 'Unknown'}"`,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      projectId: proj?._id.toString(),
+      projectName: proj?.name,
+      investorId: inv?._id.toString(),
+      investorName: inv?.name,
+      amount: dist.amount,
+      sharePercent: dist.sharePercent,
+      paidAt: dist.paidAt
+    }
+  });
+
   res.json(await enrichDistribution(dist));
 }));
 

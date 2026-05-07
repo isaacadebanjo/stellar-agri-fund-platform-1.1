@@ -7,6 +7,7 @@ import { transferXLM, getLiveBalance, ASSET, NETWORK } from '../services/stellar
 import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
 r.use(requireRole('admin'));
@@ -51,6 +52,24 @@ r.post('/invest', asyncH(async (req, res) => {
       network: NETWORK,
       errorCode: e.code || ''
     });
+
+    // Log failed investment
+    logActivity({
+      userId: req.user?.id,
+      userRole: req.user?.role || 'system',
+      actionType: ActivityTypes.INVESTMENT,
+      entityType: EntityTypes.TRANSACTION,
+      entityId: failed._id.toString(),
+      description: `Investment failed: investor ${investor.name} could not transfer ${value} XLM - ${e.message}`,
+      status: ActivityStatus.FAILED,
+      metadata: {
+        investorId: investor._id.toString(),
+        investorName: investor.name,
+        amount: value,
+        error: e.message
+      }
+    });
+
     return res.status(400).json({ error: e.message, transaction: failed.toJSON() });
   }
 
@@ -77,6 +96,26 @@ r.post('/invest', asyncH(async (req, res) => {
     status: result.status,
     network: result.network
   });
+
+  // Log successful investment
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.INVESTMENT,
+    entityType: EntityTypes.TRANSACTION,
+    entityId: tx._id.toString(),
+    description: `Investor ${investor.name} invested ${value} XLM to treasury`,
+    txHash: result.txHash,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      investorId: investor._id.toString(),
+      investorName: investor.name,
+      amount: value,
+      newWalletBalance: investorWallet.balance,
+      newTreasuryBalance: treasury.balance
+    }
+  });
+
   res.status(201).json(tx.toJSON());
 }));
 
@@ -111,6 +150,26 @@ r.post('/allocate', asyncH(async (req, res) => {
     status: 'success',
     network: 'internal'
   });
+
+  // Log successful allocation
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.ALLOCATION,
+    entityType: EntityTypes.TRANSACTION,
+    entityId: tx._id.toString(),
+    description: `Allocated ${value} XLM to project "${project.name}"`,
+    txHash: tx.txHash,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      projectId: project._id.toString(),
+      projectName: project.name,
+      amount: value,
+      newProjectAllocated: project.allocated,
+      newTreasuryBalance: treasury.balance
+    }
+  });
+
   res.status(201).json(tx.toJSON());
 }));
 

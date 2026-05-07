@@ -3,6 +3,7 @@ import Project from '../models/Project.js';
 import Revenue from '../models/Revenue.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
 
@@ -54,6 +55,23 @@ r.post('/', asyncH(async (req, res) => {
     startDate: startDate || '',
     endDate: endDate || ''
   });
+
+  // Log project creation
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.CREATE_PROJECT,
+    entityType: EntityTypes.PROJECT,
+    entityId: project._id.toString(),
+    description: `Created project "${name}"`,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      projectName: name,
+      cropType: cropType || null,
+      status: status || 'active'
+    }
+  });
+
   res.status(201).json(enrich(project.toObject(), 0));
 }));
 
@@ -69,6 +87,22 @@ r.patch('/:id', asyncH(async (req, res) => {
     runValidators: true
   });
   if (!project) return res.status(404).json({ error: 'project not found' });
+
+  // Log project update
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.UPDATE_PROJECT,
+    entityType: EntityTypes.PROJECT,
+    entityId: project._id.toString(),
+    description: `Updated project "${project.name}"`,
+    status: ActivityStatus.SUCCESS,
+    metadata: {
+      projectName: project.name,
+      updatedFields: Object.keys(update)
+    }
+  });
+
   const revAgg = await Revenue.aggregate([
     { $match: { projectId: project._id } },
     { $group: { _id: null, total: { $sum: '$amount' } } }

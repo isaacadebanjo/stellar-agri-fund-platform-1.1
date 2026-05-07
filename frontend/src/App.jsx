@@ -9,6 +9,7 @@ import Farmers from './components/Farmers.jsx';
 import Revenue from './components/Revenue.jsx';
 import Distributions from './components/Distributions.jsx';
 import Reports from './components/Reports.jsx';
+import Activity from './components/Activity.jsx';
 import Login from './components/Login.jsx';
 import { useAuth } from './auth.jsx';
 
@@ -35,6 +36,7 @@ const NAV = [
     items: [
       { id: 'transactions',  label: 'Transactions',  subtitle: 'Unified ledger of all flows',         icon: IconList,   roles: ['admin'] },
       { id: 'distributions', label: 'Distributions', subtitle: 'Profit splits to investors',          icon: IconShare,  roles: ['admin'] },
+      { id: 'activity',      label: 'Activity Log',  subtitle: 'Audit trail of all actions',         icon: IconAudit,  roles: ['admin'] },
       { id: 'reports',       label: 'Reports',       subtitle: 'Summaries with JSON export',          icon: IconReport, roles: ['admin'] }
     ]
   }
@@ -193,6 +195,7 @@ function Shell({ user, logout }) {
           {tab === 'payouts'        && isAdmin && <Payouts refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'revenue'        && isAdmin && <Revenue refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'distributions'  && isAdmin && <Distributions refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'activity'       && isAdmin && <Activity refreshKey={refreshKey} />}
           {tab === 'reports'        && isAdmin && <Reports refreshKey={refreshKey} />}
           {/* Shared */}
           {tab === 'investor-dashboard' && (
@@ -230,3 +233,4 @@ function IconReport(p)   { return <IconBase {...p}><rect x="4" y="4" width="16" 
 function IconRefresh(p)  { return <IconBase {...p}><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 4v4h-4"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 20v-4h4"/></IconBase>; }
 function IconMenu(p)     { return <IconBase {...p}><path d="M4 6h16M4 12h16M4 18h16"/></IconBase>; }
 function IconLogout(p)   { return <IconBase {...p}><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H10"/></IconBase>; }
+function IconAudit(p)    { return <IconBase {...p}><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4"/><path d="M8 9h8M8 13h8M8 17h4"/></IconBase>; }

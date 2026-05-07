@@ -5,6 +5,7 @@ import {
 } from 'recharts';
 import { api } from '../api.js';
 import { Section, StatCard, Cards, Badge, TableWrap, Empty, ErrorBanner, fmt, Money } from './ui.jsx';
+import ActivityWidget from './ActivityWidget.jsx';
 
 export default function Dashboard({ refreshKey }) {
   const [data, setData] = useState(null);
@@ -72,16 +73,7 @@ export default function Dashboard({ refreshKey }) {
           )}
         </Section>
 
-        <Section title="Treasury Wallet" subtitle="Stellar public key" className="mb-0">
-          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 break-all font-mono text-[11px] text-slate-700">
-            {data.treasury.publicKey}
-          </div>
-          <div className="mt-4 flex items-baseline gap-2">
-            <span className="stat-label">Balance</span>
-          </div>
-          <div className="stat-value">{fmt(data.treasury.balance)}</div>
-          <div className="stat-sub">XLM currently held on testnet</div>
-        </Section>
+        <ActivityWidget refreshKey={refreshKey} />
       </div>
 
       <Section title="Revenue Breakdown by Project" subtitle="Compare revenue, payouts, and profit per project">

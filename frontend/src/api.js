@@ -91,6 +91,14 @@ export const api = {
     investors: () => request('GET', '/api/reports/investors'),
     projects: () => request('GET', '/api/reports/projects'),
     revenueVsPayout: () => request('GET', '/api/reports/revenue-vs-payout')
+  },
+  activity: {
+    list: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request('GET', '/api/activity' + (qs ? `?${qs}` : ''));
+    },
+    get: (id) => request('GET', `/api/activity/${id}`),
+    summary: (limit = 20) => request('GET', `/api/activity/summary/recent?limit=${limit}`)
   }
 };
 

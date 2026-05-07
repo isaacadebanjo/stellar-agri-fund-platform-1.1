@@ -1,0 +1,101 @@
+import mongoose from 'mongoose';
+import { baseSchemaOptions } from './_base.js';
+
+// Action types enum for consistency
+export const ActivityTypes = {
+  LOGIN: 'LOGIN',
+  LOGOUT: 'LOGOUT',
+  CREATE_WALLET: 'CREATE_WALLET',
+  CREATE_INVESTOR: 'CREATE_INVESTOR',
+  CREATE_PROJECT: 'CREATE_PROJECT',
+  FUND_WALLET: 'FUND_WALLET',
+  INVESTMENT: 'INVESTMENT', // investor → treasury
+  ALLOCATION: 'ALLOCATION', // treasury → project
+  PAYOUT: 'PAYOUT',
+  REVENUE_ENTRY: 'REVENUE_ENTRY',
+  DISTRIBUTION_GENERATED: 'DISTRIBUTION_GENERATED',
+  DISTRIBUTION_PAID: 'DISTRIBUTION_PAID',
+  UPDATE_PROJECT: 'UPDATE_PROJECT',
+  CREATE_FARMER: 'CREATE_FARMER',
+  DELETE_FARMER: 'DELETE_FARMER'
+};
+
+// Entity types
+export const EntityTypes = {
+  WALLET: 'WALLET',
+  INVESTOR: 'INVESTOR',
+  PROJECT: 'PROJECT',
+  TRANSACTION: 'TRANSACTION',
+  PAYOUT: 'PAYOUT',
+  REVENUE: 'REVENUE',
+  DISTRIBUTION: 'DISTRIBUTION',
+  FARMER: 'FARMER',
+  SYSTEM: 'SYSTEM'
+};
+
+// Status enum
+export const ActivityStatus = {
+  SUCCESS: 'SUCCESS',
+  FAILED: 'FAILED',
+  PENDING: 'PENDING'
+};
+
+const schema = new mongoose.Schema(
+  {
+    userId: {
+      type: String,
+      default: null
+    },
+    userRole: {
+      type: String,
+      enum: ['admin', 'investor', 'farmer', 'system'],
+      default: 'system'
+    },
+    actionType: {
+      type: String,
+      enum: Object.values(ActivityTypes),
+      required: true,
+      index: true
+    },
+    entityType: {
+      type: String,
+      enum: Object.values(EntityTypes),
+      required: true,
+      index: true
+    },
+    entityId: {
+      type: String,
+      required: true,
+      index: true
+    },
+    description: {
+      type: String,
+      required: true
+    },
+    txHash: {
+      type: String,
+      default: null,
+      sparse: true,
+      index: true
+    },
+    status: {
+      type: String,
+      enum: Object.values(ActivityStatus),
+      default: ActivityStatus.SUCCESS,
+      index: true
+    },
+    metadata: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    }
+  },
+  baseSchemaOptions()
+);
+
+// Create compound index for common queries
+schema.index({ userId: 1, createdAt: -1 });
+schema.index({ actionType: 1, createdAt: -1 });
+schema.index({ userRole: 1, createdAt: -1 });
+schema.index({ status: 1, createdAt: -1 });
+
+export default mongoose.model('ActivityLog', schema);
