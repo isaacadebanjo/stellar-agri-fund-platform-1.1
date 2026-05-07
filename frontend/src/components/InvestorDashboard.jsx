@@ -5,20 +5,26 @@ import {
   Select, Money, fmt
 } from './ui.jsx';
 
-export default function InvestorDashboard({ refreshKey }) {
+export default function InvestorDashboard({ refreshKey, forcedInvestorId = null, hideSelector = false }) {
   const [investors, setInvestors] = useState([]);
-  const [selectedId, setSelectedId] = useState('');
+  const [selectedId, setSelectedId] = useState(forcedInvestorId || '');
   const [summary, setSummary] = useState(null);
   const [err, setErr] = useState('');
 
+  // Only admins can fetch the investor list (used to populate the dropdown).
+  // Investor users skip this and view their own summary directly.
   useEffect(() => {
+    if (hideSelector) {
+      setSelectedId(forcedInvestorId || '');
+      return;
+    }
     api.investors.list()
       .then(list => {
         setInvestors(list);
         setSelectedId(curr => curr || list[0]?.id || '');
       })
       .catch(e => setErr(e.message));
-  }, [refreshKey]);
+  }, [refreshKey, hideSelector, forcedInvestorId]);
 
   useEffect(() => {
     if (!selectedId) { setSummary(null); return; }
@@ -31,21 +37,23 @@ export default function InvestorDashboard({ refreshKey }) {
 
   return (
     <>
-      <Section
-        title="Investor Dashboard"
-        subtitle="Read-only view of an investor's portfolio (no auth — pick from the list)"
-        action={
-          investors.length > 0 && (
-            <Select value={selectedId} onChange={e => setSelectedId(e.target.value)}>
-              {investors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
-            </Select>
-          )
-        }
-      >
-        {investors.length === 0 && (
-          <Empty>No investors yet — add one in the Investors tab.</Empty>
-        )}
-      </Section>
+      {!hideSelector && (
+        <Section
+          title="Investor Dashboard"
+          subtitle="Pick an investor to view their portfolio"
+          action={
+            investors.length > 0 && (
+              <Select value={selectedId} onChange={e => setSelectedId(e.target.value)}>
+                {investors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+              </Select>
+            )
+          }
+        >
+          {investors.length === 0 && (
+            <Empty>No investors yet — add one in the Investors tab.</Empty>
+          )}
+        </Section>
+      )}
 
       {!summary ? null : (
         <>

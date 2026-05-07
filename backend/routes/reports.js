@@ -6,8 +6,10 @@ import Revenue from '../models/Revenue.js';
 import Transaction from '../models/Transaction.js';
 import Distribution from '../models/Distribution.js';
 import { asyncH } from './_async.js';
+import { requireRole } from '../middleware/auth.js';
 
 const r = Router();
+r.use(requireRole('admin'));
 
 // Per-investor rollup.
 r.get('/investors', asyncH(async (req, res) => {

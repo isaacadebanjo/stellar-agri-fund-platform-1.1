@@ -2,8 +2,13 @@ import { Router } from 'express';
 import Project from '../models/Project.js';
 import Revenue from '../models/Revenue.js';
 import { asyncH } from './_async.js';
+import { requireRole } from '../middleware/auth.js';
 
 const r = Router();
+
+// Investor users see project names in their summary via the bulk lookup —
+// list/create/edit are operational and stay admin-only.
+r.use(requireRole('admin'));
 
 function enrich(p, revenue) {
   const profit = revenue - p.spent;

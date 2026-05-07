@@ -6,8 +6,10 @@ import Project from '../models/Project.js';
 import { simulateTransfer } from '../services/stellar.js';
 import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
+import { requireRole } from '../middleware/auth.js';
 
 const r = Router();
+r.use(requireRole('admin'));
 
 r.get('/', asyncH(async (req, res) => {
   const txs = await Transaction.find().sort({ timestamp: -1 });

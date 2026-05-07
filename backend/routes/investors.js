@@ -6,10 +6,12 @@ import Distribution from '../models/Distribution.js';
 import Project from '../models/Project.js';
 import { createWallet } from '../services/stellar.js';
 import { asyncH } from './_async.js';
+import { requireRole, requireSelfOrAdmin } from '../middleware/auth.js';
 
 const r = Router();
 
-r.get('/', asyncH(async (req, res) => {
+// List + create are admin-only.
+r.get('/', requireRole('admin'), asyncH(async (req, res) => {
   const investors = await Investor.find().sort({ createdAt: 1 });
   const walletIds = investors.map(i => i.walletId);
   const wallets = await Wallet.find({ _id: { $in: walletIds } });
@@ -17,7 +19,7 @@ r.get('/', asyncH(async (req, res) => {
   res.json(investors.map(inv => ({ ...inv.toJSON(), wallet: walletById.get(inv.walletId) || null })));
 }));
 
-r.post('/', asyncH(async (req, res) => {
+r.post('/', requireRole('admin'), asyncH(async (req, res) => {
   const { name, email } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name required' });
 
@@ -38,7 +40,8 @@ r.post('/', asyncH(async (req, res) => {
 }));
 
 // Aggregated activity summary for a single investor.
-r.get('/:id/summary', asyncH(async (req, res) => {
+// Admins can view any investor; investor users only their own.
+r.get('/:id/summary', requireSelfOrAdmin(req => req.params.id), asyncH(async (req, res) => {
   const investor = await Investor.findById(req.params.id);
   if (!investor) return res.status(404).json({ error: 'investor not found' });
   const wallet = await Wallet.findById(investor.walletId);
@@ -97,7 +100,7 @@ r.get('/:id/summary', asyncH(async (req, res) => {
 }));
 
 // Top up an investor wallet (simulates the investor depositing USDC into their own wallet).
-r.post('/:id/fund', asyncH(async (req, res) => {
+r.post('/:id/fund', requireRole('admin'), asyncH(async (req, res) => {
   const investor = await Investor.findById(req.params.id);
   if (!investor) return res.status(404).json({ error: 'investor not found' });
   const amount = Number(req.body?.amount);

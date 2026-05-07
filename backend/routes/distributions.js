@@ -5,6 +5,7 @@ import Project from '../models/Project.js';
 import Revenue from '../models/Revenue.js';
 import Transaction from '../models/Transaction.js';
 import { asyncH } from './_async.js';
+import { requireRole } from '../middleware/auth.js';
 
 const r = Router();
 
@@ -50,6 +51,12 @@ r.get('/', asyncH(async (req, res) => {
   const filter = {};
   if (investorId) filter.investorId = investorId;
   if (projectId) filter.projectId = projectId;
+
+  // Investor users can only see their own distributions, regardless of query.
+  if (req.user.role === 'investor') {
+    filter.investorId = req.user.investorId;
+  }
+
   const dists = await Distribution.find(filter).sort({ timestamp: -1 });
 
   // Bulk fetch investor + project names to avoid N+1.
@@ -69,7 +76,7 @@ r.get('/', asyncH(async (req, res) => {
 }));
 
 // Preview the distribution split for a project without persisting it.
-r.get('/preview/:projectId', asyncH(async (req, res) => {
+r.get('/preview/:projectId', requireRole('admin'), asyncH(async (req, res) => {
   const project = await Project.findById(req.params.projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });
   const platformFeePercent = Number(req.query.platformFeePercent ?? 10);
@@ -104,7 +111,7 @@ r.get('/preview/:projectId', asyncH(async (req, res) => {
 }));
 
 // Generate (persist) distribution records for a project.
-r.post('/generate', asyncH(async (req, res) => {
+r.post('/generate', requireRole('admin'), asyncH(async (req, res) => {
   const { projectId, platformFeePercent } = req.body || {};
   const project = await Project.findById(projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });
@@ -157,7 +164,7 @@ r.post('/generate', asyncH(async (req, res) => {
 }));
 
 // Mark a distribution as paid (mock — no real transfer).
-r.post('/:id/mark-paid', asyncH(async (req, res) => {
+r.post('/:id/mark-paid', requireRole('admin'), asyncH(async (req, res) => {
   const dist = await Distribution.findByIdAndUpdate(
     req.params.id,
     { status: 'paid', paidAt: new Date() },

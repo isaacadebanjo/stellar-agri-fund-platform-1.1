@@ -3,6 +3,8 @@ import express from 'express';
 import cors from 'cors';
 import { connectDB } from './config/db.js';
 import { seedIfNeeded } from './config/seed.js';
+import { requireAuth } from './middleware/auth.js';
+import auth from './routes/auth.js';
 import investors from './routes/investors.js';
 import projects from './routes/projects.js';
 import transactions from './routes/transactions.js';
@@ -17,7 +19,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Public endpoints (no auth required)
 app.get('/api/health', (req, res) => res.json({ ok: true }));
+app.use('/api/auth', auth);
+
+// Everything below requires a valid JWT. Per-route role checks live in
+// the route files themselves (e.g. requireRole('admin') for write paths).
+app.use('/api', requireAuth);
 app.use('/api/investors', investors);
 app.use('/api/projects', projects);
 app.use('/api/transactions', transactions);

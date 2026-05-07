@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Dashboard from './components/Dashboard.jsx';
 import Investors from './components/Investors.jsx';
 import InvestorDashboard from './components/InvestorDashboard.jsx';
@@ -9,53 +9,87 @@ import Farmers from './components/Farmers.jsx';
 import Revenue from './components/Revenue.jsx';
 import Distributions from './components/Distributions.jsx';
 import Reports from './components/Reports.jsx';
+import Login from './components/Login.jsx';
+import { useAuth } from './auth.jsx';
 
 const NAV = [
   {
     section: 'Overview',
     items: [
-      { id: 'dashboard',          label: 'Dashboard',     subtitle: 'Treasury, totals, profit trend',   icon: IconHome },
-      { id: 'investor-dashboard', label: 'Investor View', subtitle: 'Per-investor portfolio summary',   icon: IconUser }
+      { id: 'dashboard',          label: 'Dashboard',     subtitle: 'Treasury, totals, profit trend',   icon: IconHome,  roles: ['admin'] },
+      { id: 'investor-dashboard', label: 'Investor View', subtitle: 'Per-investor portfolio summary',   icon: IconUser,  roles: ['admin', 'investor'] }
     ]
   },
   {
     section: 'Operations',
     items: [
-      { id: 'investors',    label: 'Investors',    subtitle: 'Onboard investors, fund wallets',     icon: IconUsers },
-      { id: 'projects',     label: 'Projects',     subtitle: 'Crops, allocation, lifecycle',         icon: IconLeaf },
-      { id: 'farmers',      label: 'Farmers',      subtitle: 'Recipients of project payouts',        icon: IconTractor },
-      { id: 'payouts',      label: 'Payouts',      subtitle: 'Project → farmer disbursements',       icon: IconArrowDown },
-      { id: 'revenue',      label: 'Revenue',      subtitle: 'Inflows from buyers and markets',      icon: IconArrowUp }
+      { id: 'investors',    label: 'Investors',    subtitle: 'Onboard investors, fund wallets',     icon: IconUsers,     roles: ['admin'] },
+      { id: 'projects',     label: 'Projects',     subtitle: 'Crops, allocation, lifecycle',         icon: IconLeaf,      roles: ['admin'] },
+      { id: 'farmers',      label: 'Farmers',      subtitle: 'Recipients of project payouts',        icon: IconTractor,   roles: ['admin'] },
+      { id: 'payouts',      label: 'Payouts',      subtitle: 'Project → farmer disbursements',       icon: IconArrowDown, roles: ['admin'] },
+      { id: 'revenue',      label: 'Revenue',      subtitle: 'Inflows from buyers and markets',      icon: IconArrowUp,   roles: ['admin'] }
     ]
   },
   {
     section: 'Insights',
     items: [
-      { id: 'transactions',  label: 'Transactions',  subtitle: 'Unified ledger of all flows',         icon: IconList },
-      { id: 'distributions', label: 'Distributions', subtitle: 'Profit splits to investors',          icon: IconShare },
-      { id: 'reports',       label: 'Reports',       subtitle: 'Summaries with JSON export',          icon: IconReport }
+      { id: 'transactions',  label: 'Transactions',  subtitle: 'Unified ledger of all flows',         icon: IconList,   roles: ['admin'] },
+      { id: 'distributions', label: 'Distributions', subtitle: 'Profit splits to investors',          icon: IconShare,  roles: ['admin'] },
+      { id: 'reports',       label: 'Reports',       subtitle: 'Summaries with JSON export',          icon: IconReport, roles: ['admin'] }
     ]
   }
 ];
 
-const ALL_TABS = NAV.flatMap(g => g.items);
+const INVESTOR_NAV = [
+  {
+    section: 'Portfolio',
+    items: [
+      { id: 'investor-dashboard', label: 'My Portfolio', subtitle: 'Your investments, returns, and projects', icon: IconUser, roles: ['investor'] }
+    ]
+  }
+];
 
 export default function App() {
-  const [tab, setTab] = useState('dashboard');
+  const { user, loading, logout } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center text-sm text-slate-500">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!user) return <Login />;
+
+  return <Shell user={user} logout={logout} />;
+}
+
+function Shell({ user, logout }) {
+  const isAdmin = user.role === 'admin';
+  const navGroups = (isAdmin ? NAV : INVESTOR_NAV).map(g => ({
+    ...g,
+    items: g.items.filter(i => i.roles.includes(user.role))
+  })).filter(g => g.items.length > 0);
+  const allTabs = navGroups.flatMap(g => g.items);
+
+  const defaultTab = isAdmin ? 'dashboard' : 'investor-dashboard';
+  const [tab, setTab] = useState(defaultTab);
   const [refreshKey, setRefreshKey] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
   const refresh = () => setRefreshKey(k => k + 1);
 
-  const current = ALL_TABS.find(t => t.id === tab) ?? ALL_TABS[0];
+  // If the active tab isn't in the user's allowed list, drop back to default.
+  useEffect(() => {
+    if (!allTabs.find(t => t.id === tab)) setTab(defaultTab);
+  }, [user, tab, defaultTab, allTabs]);
 
-  function go(id) {
-    setTab(id);
-    setMobileOpen(false);
-  }
+  const current = allTabs.find(t => t.id === tab) ?? allTabs[0];
+
+  function go(id) { setTab(id); setMobileOpen(false); }
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Mobile backdrop */}
       {mobileOpen && (
         <button
           aria-label="Close menu"
@@ -64,14 +98,11 @@ export default function App() {
         />
       )}
 
-      {/* Sidebar */}
-      <aside
-        className={
-          'fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 ' +
-          'transition-transform duration-200 ease-out flex flex-col ' +
-          (mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0')
-        }
-      >
+      <aside className={
+        'fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 ' +
+        'transition-transform duration-200 ease-out flex flex-col ' +
+        (mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0')
+      }>
         <div className="px-5 py-4 border-b border-slate-200 flex items-center gap-3">
           <div className="h-9 w-9 rounded-lg bg-gradient-to-br from-brand-500 to-brand-800 flex items-center justify-center text-white text-lg shadow-sm">
             🌱
@@ -83,7 +114,7 @@ export default function App() {
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
-          {NAV.map(group => (
+          {navGroups.map(group => (
             <div key={group.section}>
               <div className="px-2 pb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                 {group.section}
@@ -98,7 +129,7 @@ export default function App() {
                       onClick={() => go(item.id)}
                       className={'nav-link w-full text-left ' + (Active ? 'nav-link-active' : '')}
                     >
-                      <Icon className={'h-4 w-4 ' + (Active ? 'text-brand-700' : 'text-slate-400 group-hover:text-slate-600')} />
+                      <Icon className={'h-4 w-4 ' + (Active ? 'text-brand-700' : 'text-slate-400')} />
                       <span>{item.label}</span>
                     </button>
                   );
@@ -108,14 +139,22 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="px-5 py-3 border-t border-slate-200 text-[11px] text-slate-400">
-          v0.3 · Phase 3 prototype
+        <div className="border-t border-slate-200 px-3 py-3">
+          <div className="flex items-center justify-between gap-2 px-2 mb-2">
+            <div className="min-w-0">
+              <div className="text-xs font-medium text-slate-900 truncate">{user.email}</div>
+              <div className="text-[10px] uppercase tracking-wider text-slate-500">{user.role}</div>
+            </div>
+          </div>
+          <button onClick={logout} className="nav-link w-full text-left text-rose-600 hover:bg-rose-50 hover:text-rose-700">
+            <IconLogout className="h-4 w-4" />
+            <span>Sign out</span>
+          </button>
+          <div className="px-2 pt-2 text-[10px] text-slate-400">v0.4 · Phase 4</div>
         </div>
       </aside>
 
-      {/* Main column */}
       <div className="md:pl-64">
-        {/* Topbar */}
         <header className="sticky top-0 z-20 bg-white/80 backdrop-blur border-b border-slate-200">
           <div className="px-4 sm:px-6 py-3.5 flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
@@ -127,8 +166,8 @@ export default function App() {
                 <IconMenu className="h-5 w-5" />
               </button>
               <div className="min-w-0">
-                <h1 className="text-base font-semibold text-slate-900 truncate">{current.label}</h1>
-                <p className="text-xs text-slate-500 truncate">{current.subtitle}</p>
+                <h1 className="text-base font-semibold text-slate-900 truncate">{current?.label}</h1>
+                <p className="text-xs text-slate-500 truncate">{current?.subtitle}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -145,23 +184,31 @@ export default function App() {
         </header>
 
         <main className="px-4 sm:px-6 py-6 max-w-[1400px] mx-auto">
-          {tab === 'dashboard'          && <Dashboard refreshKey={refreshKey} />}
-          {tab === 'investor-dashboard' && <InvestorDashboard refreshKey={refreshKey} />}
-          {tab === 'investors'          && <Investors refreshKey={refreshKey} onChange={refresh} />}
-          {tab === 'projects'           && <Projects refreshKey={refreshKey} onChange={refresh} />}
-          {tab === 'transactions'       && <Transactions refreshKey={refreshKey} />}
-          {tab === 'farmers'            && <Farmers refreshKey={refreshKey} onChange={refresh} />}
-          {tab === 'payouts'            && <Payouts refreshKey={refreshKey} onChange={refresh} />}
-          {tab === 'revenue'            && <Revenue refreshKey={refreshKey} onChange={refresh} />}
-          {tab === 'distributions'      && <Distributions refreshKey={refreshKey} onChange={refresh} />}
-          {tab === 'reports'            && <Reports refreshKey={refreshKey} />}
+          {/* Admin tabs */}
+          {tab === 'dashboard'      && isAdmin && <Dashboard refreshKey={refreshKey} />}
+          {tab === 'investors'      && isAdmin && <Investors refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'projects'       && isAdmin && <Projects refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'transactions'   && isAdmin && <Transactions refreshKey={refreshKey} />}
+          {tab === 'farmers'        && isAdmin && <Farmers refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'payouts'        && isAdmin && <Payouts refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'revenue'        && isAdmin && <Revenue refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'distributions'  && isAdmin && <Distributions refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'reports'        && isAdmin && <Reports refreshKey={refreshKey} />}
+          {/* Shared */}
+          {tab === 'investor-dashboard' && (
+            <InvestorDashboard
+              refreshKey={refreshKey}
+              forcedInvestorId={isAdmin ? null : user.investorId}
+              hideSelector={!isAdmin}
+            />
+          )}
         </main>
       </div>
     </div>
   );
 }
 
-/* ------- inline icons (lightweight, no extra deps) ------- */
+/* ------- inline icons ------- */
 function IconBase({ children, className = 'h-4 w-4' }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75"
@@ -182,3 +229,4 @@ function IconShare(p)    { return <IconBase {...p}><circle cx="6" cy="12" r="2.5
 function IconReport(p)   { return <IconBase {...p}><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 14v3M12 10v7M16 7v10"/></IconBase>; }
 function IconRefresh(p)  { return <IconBase {...p}><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 4v4h-4"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 20v-4h4"/></IconBase>; }
 function IconMenu(p)     { return <IconBase {...p}><path d="M4 6h16M4 12h16M4 18h16"/></IconBase>; }
+function IconLogout(p)   { return <IconBase {...p}><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H10"/></IconBase>; }

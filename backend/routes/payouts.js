@@ -4,8 +4,10 @@ import Project from '../models/Project.js';
 import Farmer from '../models/Farmer.js';
 import Transaction from '../models/Transaction.js';
 import { asyncH } from './_async.js';
+import { requireRole } from '../middleware/auth.js';
 
 const r = Router();
+r.use(requireRole('admin'));
 
 r.get('/', asyncH(async (req, res) => {
   const payouts = await Payout.find().sort({ timestamp: -1 });

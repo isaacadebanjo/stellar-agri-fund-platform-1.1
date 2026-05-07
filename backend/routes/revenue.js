@@ -2,8 +2,10 @@ import { Router } from 'express';
 import Revenue from '../models/Revenue.js';
 import Project from '../models/Project.js';
 import { asyncH } from './_async.js';
+import { requireRole } from '../middleware/auth.js';
 
 const r = Router();
+r.use(requireRole('admin'));
 
 r.get('/', asyncH(async (req, res) => {
   const { projectId } = req.query;

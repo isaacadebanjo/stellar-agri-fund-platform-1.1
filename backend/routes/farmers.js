@@ -3,8 +3,10 @@ import Farmer from '../models/Farmer.js';
 import Project from '../models/Project.js';
 import Payout from '../models/Payout.js';
 import { asyncH } from './_async.js';
+import { requireRole } from '../middleware/auth.js';
 
 const r = Router();
+r.use(requireRole('admin'));
 
 async function enrich(farmer, payouts, projectsById) {
   const farmerPayouts = payouts.filter(p => p.farmerId === farmer._id);

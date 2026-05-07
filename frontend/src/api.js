@@ -3,12 +3,37 @@
 // Locally it stays empty so Vite's dev proxy (vite.config.js) handles /api.
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
+const TOKEN_KEY = 'agri_token';
+
+export const tokenStore = {
+  get: () => localStorage.getItem(TOKEN_KEY),
+  set: (t) => localStorage.setItem(TOKEN_KEY, t),
+  clear: () => localStorage.removeItem(TOKEN_KEY)
+};
+
+// Hook the AuthProvider can register so the api client can force a logout
+// on 401 (expired or invalid token) without importing React in this file.
+let onUnauthorized = null;
+export function setOnUnauthorized(fn) { onUnauthorized = fn; }
+
 async function request(method, url, body) {
+  const headers = {};
+  if (body) headers['Content-Type'] = 'application/json';
+  const token = tokenStore.get();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
   const res = await fetch(API_BASE + url, {
     method,
-    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined
   });
+
+  if (res.status === 401) {
+    tokenStore.clear();
+    if (onUnauthorized) onUnauthorized();
+    throw new Error('Session expired — please sign in again');
+  }
+
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || 'Request failed');
@@ -17,6 +42,11 @@ async function request(method, url, body) {
 }
 
 export const api = {
+  auth: {
+    login: (email, password) => request('POST', '/api/auth/login', { email, password }),
+    me: () => request('GET', '/api/auth/me'),
+    logout: () => request('POST', '/api/auth/logout')
+  },
   dashboard: () => request('GET', '/api/dashboard'),
   investors: {
     list: () => request('GET', '/api/investors'),

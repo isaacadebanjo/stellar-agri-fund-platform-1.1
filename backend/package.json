@@ -11,9 +11,11 @@
     "node": ">=20"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.1",
     "nanoid": "^5.0.7",
     "stellar-sdk": "^12.1.0"

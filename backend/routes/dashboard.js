@@ -8,8 +8,11 @@ import Transaction from '../models/Transaction.js';
 import Distribution from '../models/Distribution.js';
 import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
+import { requireRole } from '../middleware/auth.js';
 
 const r = Router();
+// Operational dashboard is admin-only. Investors get their own /investors/:id/summary.
+r.use(requireRole('admin'));
 
 r.get('/', asyncH(async (req, res) => {
   const [
