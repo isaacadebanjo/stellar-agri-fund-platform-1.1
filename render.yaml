@@ -14,4 +14,4 @@ services:
       - key: MONGODB_URI
         sync: false   # set in the Render dashboard; never committed
       - key: JWT_SECRET
-        sync: false   # set in the Render dashboard; never committed
+        generateValue: true   # Render auto-generates a random secret on first deploy
