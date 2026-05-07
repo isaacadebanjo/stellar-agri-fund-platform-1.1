@@ -10,6 +10,7 @@ import Revenue from './components/Revenue.jsx';
 import Distributions from './components/Distributions.jsx';
 import Reports from './components/Reports.jsx';
 import Activity from './components/Activity.jsx';
+import Treasury from './components/Treasury.jsx';
 import Login from './components/Login.jsx';
 import { useAuth } from './auth.jsx';
 
@@ -18,6 +19,7 @@ const NAV = [
     section: 'Overview',
     items: [
       { id: 'dashboard',          label: 'Dashboard',     subtitle: 'Treasury, totals, profit trend',   icon: IconHome,  roles: ['admin'] },
+      { id: 'treasury',           label: 'Treasury',      subtitle: 'Capital flows and liquidity',      icon: IconVault, roles: ['admin'] },
       { id: 'investor-dashboard', label: 'Investor View', subtitle: 'Per-investor portfolio summary',   icon: IconUser,  roles: ['admin', 'investor'] }
     ]
   },
@@ -188,6 +190,7 @@ function Shell({ user, logout }) {
         <main className="px-4 sm:px-6 py-6 max-w-[1400px] mx-auto">
           {/* Admin tabs */}
           {tab === 'dashboard'      && isAdmin && <Dashboard refreshKey={refreshKey} />}
+          {tab === 'treasury'       && isAdmin && <Treasury />}
           {tab === 'investors'      && isAdmin && <Investors refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'projects'       && isAdmin && <Projects refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'transactions'   && isAdmin && <Transactions refreshKey={refreshKey} />}
@@ -234,3 +237,4 @@ function IconRefresh(p)  { return <IconBase {...p}><path d="M3 12a9 9 0 0 1 15-6
 function IconMenu(p)     { return <IconBase {...p}><path d="M4 6h16M4 12h16M4 18h16"/></IconBase>; }
 function IconLogout(p)   { return <IconBase {...p}><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H10"/></IconBase>; }
 function IconAudit(p)    { return <IconBase {...p}><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4"/><path d="M8 9h8M8 13h8M8 17h4"/></IconBase>; }
+function IconVault(p)   { return <IconBase {...p}><rect x="3" y="7" width="18" height="12" rx="2"/><circle cx="12" cy="13" r="2.5"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></IconBase>; }

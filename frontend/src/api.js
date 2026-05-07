@@ -99,6 +99,15 @@ export const api = {
     },
     get: (id) => request('GET', `/api/activity/${id}`),
     summary: (limit = 20) => request('GET', `/api/activity/summary/recent?limit=${limit}`)
+  },
+  treasury: {
+    overview: () => request('GET', '/api/treasury/overview'),
+    flows: (days = 90) => request('GET', `/api/treasury/flows?days=${days}`),
+    obligations: () => request('GET', '/api/treasury/obligations'),
+    transactions: (params = {}) => {
+      const qs = new URLSearchParams(params).toString();
+      return request('GET', '/api/treasury/transactions' + (qs ? `?${qs}` : ''));
+    }
   }
 };
 
