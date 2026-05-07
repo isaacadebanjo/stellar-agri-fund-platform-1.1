@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import {
   Section, Button, Input, TableWrap, Empty, ErrorBanner, Money, fmt
 } from './ui.jsx';
+import DownloadStatementButton from './DownloadStatementButton.jsx';
 
 export default function Investors({ refreshKey, onChange }) {
   const [investors, setInvestors] = useState([]);
@@ -81,6 +82,7 @@ export default function Investors({ refreshKey, onChange }) {
                     <td className="text-right"><Money value={inv.wallet?.balance} /></td>
                     <td className="text-right">
                       <div className="inline-flex items-center gap-2">
+                        <DownloadStatementButton investorId={inv.id} investorName={inv.name} />
                         <Button variant="ghost" onClick={() => fund(inv.id)}>Fund</Button>
                         <Button onClick={() => invest(inv.id, inv.wallet?.balance ?? 0)}>Invest →</Button>
                       </div>

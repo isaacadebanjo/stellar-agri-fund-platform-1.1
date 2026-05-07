@@ -15,6 +15,7 @@ import revenue from './routes/revenue.js';
 import distributions from './routes/distributions.js';
 import reports from './routes/reports.js';
 import activity from './routes/activity.js';
+import statements from './routes/statements.js';
 
 const app = express();
 app.use(cors());
@@ -37,6 +38,7 @@ app.use('/api/revenue', revenue);
 app.use('/api/distributions', distributions);
 app.use('/api/reports', reports);
 app.use('/api/activity', activity);
+app.use('/api/statements', statements);
 
 // Central error handler — catches anything thrown from asyncH-wrapped routes.
 // eslint-disable-next-line no-unused-vars

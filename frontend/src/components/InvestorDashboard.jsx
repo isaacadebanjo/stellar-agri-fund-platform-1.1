@@ -4,6 +4,7 @@ import {
   Section, StatCard, Cards, Badge, TableWrap, Empty, ErrorBanner,
   Select, Money, fmt
 } from './ui.jsx';
+import DownloadStatementButton from './DownloadStatementButton.jsx';
 
 export default function InvestorDashboard({ refreshKey, forcedInvestorId = null, hideSelector = false }) {
   const [investors, setInvestors] = useState([]);
@@ -53,6 +54,13 @@ export default function InvestorDashboard({ refreshKey, forcedInvestorId = null,
             <Empty>No investors yet — add one in the Investors tab.</Empty>
           )}
         </Section>
+      )}
+
+      {/* Download Statement Button */}
+      {summary && selectedId && (
+        <div className="mb-5 flex justify-end">
+          <DownloadStatementButton investorId={selectedId} investorName={summary.investor?.name} />
+        </div>
       )}
 
       {!summary ? null : (
