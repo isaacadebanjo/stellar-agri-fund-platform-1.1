@@ -1,84 +1,83 @@
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
-import { db } from '../db.js';
+import Investor from '../models/Investor.js';
+import Wallet from '../models/Wallet.js';
+import Transaction from '../models/Transaction.js';
+import Distribution from '../models/Distribution.js';
+import Project from '../models/Project.js';
 import { createWallet } from '../services/stellar.js';
+import { asyncH } from './_async.js';
 
 const r = Router();
 
-r.get('/', (req, res) => {
-  const investors = db.data.investors.map(inv => {
-    const wallet = db.data.wallets.find(w => w.id === inv.walletId);
-    return { ...inv, wallet };
-  });
-  res.json(investors);
-});
+r.get('/', asyncH(async (req, res) => {
+  const investors = await Investor.find().sort({ createdAt: 1 });
+  const walletIds = investors.map(i => i.walletId);
+  const wallets = await Wallet.find({ _id: { $in: walletIds } });
+  const walletById = new Map(wallets.map(w => [w._id, w.toJSON()]));
+  res.json(investors.map(inv => ({ ...inv.toJSON(), wallet: walletById.get(inv.walletId) || null })));
+}));
 
-r.post('/', async (req, res) => {
+r.post('/', asyncH(async (req, res) => {
   const { name, email } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name required' });
 
   const { publicKey, secret } = createWallet();
-  const wallet = {
-    id: nanoid(8),
+  const wallet = await Wallet.create({
     label: `${name} Wallet`,
     publicKey,
     secret,
     type: 'investor',
-    balance: 0,
-    createdAt: new Date().toISOString()
-  };
-  const investor = {
-    id: nanoid(8),
+    balance: 0
+  });
+  const investor = await Investor.create({
     name,
     email: email || '',
-    walletId: wallet.id,
-    createdAt: new Date().toISOString()
-  };
-  db.data.wallets.push(wallet);
-  db.data.investors.push(investor);
-  await db.write();
-  res.status(201).json({ ...investor, wallet });
-});
+    walletId: wallet._id
+  });
+  res.status(201).json({ ...investor.toJSON(), wallet: wallet.toJSON() });
+}));
 
 // Aggregated activity summary for a single investor.
-r.get('/:id/summary', (req, res) => {
-  const investor = db.data.investors.find(i => i.id === req.params.id);
+r.get('/:id/summary', asyncH(async (req, res) => {
+  const investor = await Investor.findById(req.params.id);
   if (!investor) return res.status(404).json({ error: 'investor not found' });
-  const wallet = db.data.wallets.find(w => w.id === investor.walletId);
+  const wallet = await Wallet.findById(investor.walletId);
 
-  const investmentTxs = db.data.transactions.filter(
-    t => t.stage === 'investment' && t.senderId === investor.walletId
-  );
+  const investmentTxs = await Transaction.find({
+    stage: 'investment',
+    senderId: investor.walletId
+  }).sort({ timestamp: -1 });
   const totalInvested = investmentTxs.reduce((s, t) => s + t.amount, 0);
 
-  const dists = db.data.distributions.filter(d => d.investorId === investor.id);
+  const dists = await Distribution.find({ investorId: investor._id }).sort({ timestamp: -1 });
   const totalReturns = dists.reduce((s, d) => s + d.amount, 0);
   const paidReturns = dists.filter(d => d.status === 'paid').reduce((s, d) => s + d.amount, 0);
   const pendingReturns = dists.filter(d => d.status !== 'paid').reduce((s, d) => s + d.amount, 0);
 
   const projectIds = Array.from(new Set(dists.map(d => d.projectId)));
+  const projectDocs = await Project.find({ _id: { $in: projectIds } });
   const projects = projectIds.map(pid => {
-    const p = db.data.projects.find(x => x.id === pid);
+    const p = projectDocs.find(x => x._id === pid);
+    if (!p) return null;
     const investorShareInProject = dists
       .filter(d => d.projectId === pid)
       .reduce((s, d) => s + d.amount, 0);
-    return p ? {
-      id: p.id,
+    return {
+      id: p._id,
       name: p.name,
       cropType: p.cropType || '',
       status: p.status || 'active',
       estimatedReturn: +investorShareInProject.toFixed(2)
-    } : null;
+    };
   }).filter(Boolean);
 
-  // Current estimated value = wallet balance (uninvested) + invested capital + returns booked.
   const currentEstimatedValue = +(
     (wallet?.balance || 0) + totalInvested + totalReturns
   ).toFixed(2);
 
   res.json({
-    investor: { id: investor.id, name: investor.name, email: investor.email },
-    wallet: wallet ? { id: wallet.id, publicKey: wallet.publicKey, balance: wallet.balance } : null,
+    investor: { id: investor._id, name: investor.name, email: investor.email },
+    wallet: wallet ? { id: wallet._id, publicKey: wallet.publicKey, balance: wallet.balance } : null,
     totals: {
       invested: +totalInvested.toFixed(2),
       returns: +totalReturns.toFixed(2),
@@ -89,26 +88,29 @@ r.get('/:id/summary', (req, res) => {
       transactionsCount: investmentTxs.length
     },
     projects,
-    transactions: [...investmentTxs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)),
-    distributions: [...dists]
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
-      .map(d => ({
-        ...d,
-        projectName: db.data.projects.find(p => p.id === d.projectId)?.name || 'Unknown'
-      }))
+    transactions: investmentTxs.map(t => t.toJSON()),
+    distributions: dists.map(d => {
+      const proj = projectDocs.find(p => p._id === d.projectId);
+      return { ...d.toJSON(), projectName: proj?.name || 'Unknown' };
+    })
   });
-});
+}));
 
 // Top up an investor wallet (simulates the investor depositing USDC into their own wallet).
-r.post('/:id/fund', async (req, res) => {
-  const investor = db.data.investors.find(i => i.id === req.params.id);
+r.post('/:id/fund', asyncH(async (req, res) => {
+  const investor = await Investor.findById(req.params.id);
   if (!investor) return res.status(404).json({ error: 'investor not found' });
-  const wallet = db.data.wallets.find(w => w.id === investor.walletId);
   const amount = Number(req.body?.amount);
   if (!amount || amount <= 0) return res.status(400).json({ error: 'amount > 0 required' });
-  wallet.balance = +(wallet.balance + amount).toFixed(2);
-  await db.write();
-  res.json({ wallet });
-});
+
+  const wallet = await Wallet.findByIdAndUpdate(
+    investor.walletId,
+    { $inc: { balance: amount } },
+    { new: true }
+  );
+  if (wallet) wallet.balance = +wallet.balance.toFixed(2);
+  await wallet?.save();
+  res.json({ wallet: wallet?.toJSON() });
+}));
 
 export default r;

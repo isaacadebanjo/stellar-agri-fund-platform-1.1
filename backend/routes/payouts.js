@@ -1,66 +1,68 @@
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
-import { db } from '../db.js';
+import Payout from '../models/Payout.js';
+import Project from '../models/Project.js';
+import Farmer from '../models/Farmer.js';
+import Transaction from '../models/Transaction.js';
+import { asyncH } from './_async.js';
 
 const r = Router();
 
-r.get('/', (req, res) => {
-  const sorted = [...db.data.payouts].sort((a, b) =>
-    new Date(b.timestamp) - new Date(a.timestamp)
-  );
-  res.json(sorted);
-});
+r.get('/', asyncH(async (req, res) => {
+  const payouts = await Payout.find().sort({ timestamp: -1 });
+  res.json(payouts.map(p => p.toJSON()));
+}));
 
 // Manual payout entry: project → farmer (must be linked to a registered farmer + project)
-r.post('/', async (req, res) => {
+r.post('/', asyncH(async (req, res) => {
   const { projectId, farmerId, amount, note } = req.body || {};
   const value = Number(amount);
-  const project = db.data.projects.find(p => p.id === projectId);
-  if (!project) return res.status(404).json({ error: 'project not found' });
-  const farmer = db.data.farmers.find(f => f.id === farmerId);
-  if (!farmer) return res.status(404).json({ error: 'farmer not found' });
   if (!value || value <= 0) return res.status(400).json({ error: 'amount > 0 required' });
+
+  const project = await Project.findById(projectId);
+  if (!project) return res.status(404).json({ error: 'project not found' });
+  const farmer = await Farmer.findById(farmerId);
+  if (!farmer) return res.status(404).json({ error: 'farmer not found' });
 
   const remaining = project.allocated - project.spent;
   if (remaining < value) return res.status(400).json({ error: 'Project has insufficient allocated funds' });
 
   project.spent = +(project.spent + value).toFixed(2);
+  await project.save();
 
   // Auto-link the project to the farmer's assigned list.
-  if (!Array.isArray(farmer.assignedProjects)) farmer.assignedProjects = [];
-  if (!farmer.assignedProjects.includes(project.id)) farmer.assignedProjects.push(project.id);
+  if (!farmer.assignedProjects.includes(project._id)) {
+    farmer.assignedProjects.push(project._id);
+    await farmer.save();
+  }
 
-  const payout = {
-    id: nanoid(10),
-    projectId: project.id,
+  const timestamp = new Date();
+  const payout = await Payout.create({
+    projectId: project._id,
     projectName: project.name,
-    farmerId: farmer.id,
+    farmerId: farmer._id,
     farmerName: farmer.name,
     farmerWallet: farmer.walletId || '',
     amount: value,
     asset: 'USDC',
     note: note || '',
-    timestamp: new Date().toISOString()
-  };
-  db.data.payouts.push(payout);
+    timestamp
+  });
 
   // Mirror into the unified transactions ledger so the dashboard tells the full story.
-  db.data.transactions.push({
-    id: nanoid(10),
+  await Transaction.create({
     stage: 'payout',
     amount: value,
     asset: 'USDC',
-    senderId: project.id,
+    senderId: project._id,
     senderLabel: `Project: ${project.name}`,
-    receiverId: farmer.id,
+    receiverId: farmer._id,
     receiverLabel: `Farmer: ${farmer.name}`,
-    projectId: project.id,
+    projectId: project._id,
     txHash: 'mock_payout_' + Math.random().toString(36).slice(2, 12),
-    timestamp: payout.timestamp
+    timestamp
   });
 
-  await db.write();
-  res.status(201).json(payout);
-});
+  res.status(201).json(payout.toJSON());
+}));
 
 export default r;

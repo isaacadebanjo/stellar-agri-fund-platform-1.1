@@ -1,39 +1,37 @@
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
-import { db } from '../db.js';
+import Revenue from '../models/Revenue.js';
+import Project from '../models/Project.js';
+import { asyncH } from './_async.js';
 
 const r = Router();
 
-r.get('/', (req, res) => {
+r.get('/', asyncH(async (req, res) => {
   const { projectId } = req.query;
-  let rows = db.data.revenue;
-  if (projectId) rows = rows.filter(r => r.projectId === projectId);
-  const enriched = rows
-    .map(rec => ({
-      ...rec,
-      projectName: db.data.projects.find(p => p.id === rec.projectId)?.name || 'Unknown'
-    }))
-    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  res.json(enriched);
-});
+  const filter = projectId ? { projectId } : {};
+  const [rows, projects] = await Promise.all([
+    Revenue.find(filter).sort({ timestamp: -1 }),
+    Project.find().lean()
+  ]);
+  const nameById = new Map(projects.map(p => [p._id, p.name]));
+  res.json(rows.map(rec => ({
+    ...rec.toJSON(),
+    projectName: nameById.get(rec.projectId) || 'Unknown'
+  })));
+}));
 
-r.post('/', async (req, res) => {
+r.post('/', asyncH(async (req, res) => {
   const { projectId, amount, source } = req.body || {};
   const value = Number(amount);
-  const project = db.data.projects.find(p => p.id === projectId);
-  if (!project) return res.status(404).json({ error: 'project not found' });
   if (!value || value <= 0) return res.status(400).json({ error: 'amount > 0 required' });
+  const project = await Project.findById(projectId);
+  if (!project) return res.status(404).json({ error: 'project not found' });
 
-  const record = {
-    id: nanoid(10),
+  const record = await Revenue.create({
     projectId,
     amount: value,
-    source: (source || '').trim(),
-    timestamp: new Date().toISOString()
-  };
-  db.data.revenue.push(record);
-  await db.write();
-  res.status(201).json({ ...record, projectName: project.name });
-});
+    source: (source || '').trim()
+  });
+  res.status(201).json({ ...record.toJSON(), projectName: project.name });
+}));
 
 export default r;

@@ -1,81 +1,82 @@
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
-import { db, getTreasury } from '../db.js';
+import Transaction from '../models/Transaction.js';
+import Investor from '../models/Investor.js';
+import Wallet from '../models/Wallet.js';
+import Project from '../models/Project.js';
 import { simulateTransfer } from '../services/stellar.js';
+import { getTreasury } from '../config/seed.js';
+import { asyncH } from './_async.js';
 
 const r = Router();
 
-r.get('/', (req, res) => {
-  const sorted = [...db.data.transactions].sort((a, b) =>
-    new Date(b.timestamp) - new Date(a.timestamp)
-  );
-  res.json(sorted);
-});
+r.get('/', asyncH(async (req, res) => {
+  const txs = await Transaction.find().sort({ timestamp: -1 });
+  res.json(txs.map(t => t.toJSON()));
+}));
 
 // Investor → Treasury
-r.post('/invest', async (req, res) => {
+r.post('/invest', asyncH(async (req, res) => {
   const { investorId, amount } = req.body || {};
   const value = Number(amount);
-  const investor = db.data.investors.find(i => i.id === investorId);
-  if (!investor) return res.status(404).json({ error: 'investor not found' });
   if (!value || value <= 0) return res.status(400).json({ error: 'amount > 0 required' });
 
-  const investorWallet = db.data.wallets.find(w => w.id === investor.walletId);
-  const treasury = getTreasury();
+  const investor = await Investor.findById(investorId);
+  if (!investor) return res.status(404).json({ error: 'investor not found' });
+
+  const investorWallet = await Wallet.findById(investor.walletId);
+  const treasury = await getTreasury();
+  if (!investorWallet || !treasury) return res.status(500).json({ error: 'wallets not initialised' });
 
   try {
     const meta = simulateTransfer({ from: investorWallet, to: treasury, amount: value });
-    const tx = {
-      id: nanoid(10),
+    await investorWallet.save();
+    await treasury.save();
+    const tx = await Transaction.create({
       stage: 'investment',
       amount: value,
       asset: 'USDC',
-      senderId: investorWallet.id,
+      senderId: investorWallet._id,
       senderLabel: investorWallet.label,
-      receiverId: treasury.id,
+      receiverId: treasury._id,
       receiverLabel: treasury.label,
       projectId: null,
-      txHash: meta.txHash,
-      timestamp: new Date().toISOString()
-    };
-    db.data.transactions.push(tx);
-    await db.write();
-    res.status(201).json(tx);
+      txHash: meta.txHash
+    });
+    res.status(201).json(tx.toJSON());
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
-});
+}));
 
 // Treasury → Project allocation (no real wallet — project balance is tracked on the project record)
-r.post('/allocate', async (req, res) => {
+r.post('/allocate', asyncH(async (req, res) => {
   const { projectId, amount } = req.body || {};
   const value = Number(amount);
-  const project = db.data.projects.find(p => p.id === projectId);
-  if (!project) return res.status(404).json({ error: 'project not found' });
   if (!value || value <= 0) return res.status(400).json({ error: 'amount > 0 required' });
 
-  const treasury = getTreasury();
+  const project = await Project.findById(projectId);
+  if (!project) return res.status(404).json({ error: 'project not found' });
+  const treasury = await getTreasury();
+  if (!treasury) return res.status(500).json({ error: 'treasury not initialised' });
   if (treasury.balance < value) return res.status(400).json({ error: 'Treasury has insufficient funds' });
 
   treasury.balance = +(treasury.balance - value).toFixed(2);
   project.allocated = +(project.allocated + value).toFixed(2);
+  await treasury.save();
+  await project.save();
 
-  const tx = {
-    id: nanoid(10),
+  const tx = await Transaction.create({
     stage: 'allocation',
     amount: value,
     asset: 'USDC',
-    senderId: treasury.id,
+    senderId: treasury._id,
     senderLabel: treasury.label,
-    receiverId: project.id,
+    receiverId: project._id,
     receiverLabel: `Project: ${project.name}`,
-    projectId: project.id,
-    txHash: 'mock_alloc_' + Math.random().toString(36).slice(2, 12),
-    timestamp: new Date().toISOString()
-  };
-  db.data.transactions.push(tx);
-  await db.write();
-  res.status(201).json(tx);
-});
+    projectId: project._id,
+    txHash: 'mock_alloc_' + Math.random().toString(36).slice(2, 12)
+  });
+  res.status(201).json(tx.toJSON());
+}));
 
 export default r;

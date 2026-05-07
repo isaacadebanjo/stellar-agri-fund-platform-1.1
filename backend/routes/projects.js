@@ -1,60 +1,74 @@
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
-import { db } from '../db.js';
+import Project from '../models/Project.js';
+import Revenue from '../models/Revenue.js';
+import { asyncH } from './_async.js';
 
 const r = Router();
 
-function enrich(p) {
-  const revenue = db.data.revenue
-    .filter(r => r.projectId === p.id)
-    .reduce((s, r) => s + r.amount, 0);
+function enrich(p, revenue) {
+  const profit = revenue - p.spent;
   return {
-    ...p,
+    id: p._id,
+    name: p.name,
+    description: p.description || '',
     cropType: p.cropType || '',
     status: p.status || 'active',
     startDate: p.startDate || '',
     endDate: p.endDate || '',
+    allocated: p.allocated,
+    spent: p.spent,
+    createdAt: p.createdAt,
     paidOut: p.spent,
     remaining: +(p.allocated - p.spent).toFixed(2),
     revenue: +revenue.toFixed(2),
-    profit: +(revenue - p.spent).toFixed(2)
+    profit: +profit.toFixed(2)
   };
 }
 
-r.get('/', (req, res) => {
-  res.json(db.data.projects.map(enrich));
-});
+async function revenueByProject() {
+  const grouped = await Revenue.aggregate([
+    { $group: { _id: '$projectId', total: { $sum: '$amount' } } }
+  ]);
+  return new Map(grouped.map(g => [g._id, g.total]));
+}
 
-r.post('/', async (req, res) => {
+r.get('/', asyncH(async (req, res) => {
+  const projects = await Project.find().sort({ createdAt: 1 }).lean();
+  const revMap = await revenueByProject();
+  res.json(projects.map(p => enrich(p, revMap.get(p._id) || 0)));
+}));
+
+r.post('/', asyncH(async (req, res) => {
   const { name, description, cropType, status, startDate, endDate } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name required' });
-  const project = {
-    id: nanoid(8),
+  const project = await Project.create({
     name,
     description: description || '',
     cropType: cropType || '',
     status: status || 'active',
     startDate: startDate || '',
-    endDate: endDate || '',
-    allocated: 0,
-    spent: 0,
-    createdAt: new Date().toISOString()
-  };
-  db.data.projects.push(project);
-  await db.write();
-  res.status(201).json(enrich(project));
-});
+    endDate: endDate || ''
+  });
+  res.status(201).json(enrich(project.toObject(), 0));
+}));
 
 // Update project fields (status, dates, crop, etc.)
-r.patch('/:id', async (req, res) => {
-  const project = db.data.projects.find(p => p.id === req.params.id);
-  if (!project) return res.status(404).json({ error: 'project not found' });
+r.patch('/:id', asyncH(async (req, res) => {
   const allowed = ['name', 'description', 'cropType', 'status', 'startDate', 'endDate'];
+  const update = {};
   for (const k of allowed) {
-    if (req.body && req.body[k] !== undefined) project[k] = req.body[k];
+    if (req.body && req.body[k] !== undefined) update[k] = req.body[k];
   }
-  await db.write();
-  res.json(enrich(project));
-});
+  const project = await Project.findByIdAndUpdate(req.params.id, update, {
+    new: true,
+    runValidators: true
+  });
+  if (!project) return res.status(404).json({ error: 'project not found' });
+  const revAgg = await Revenue.aggregate([
+    { $match: { projectId: project._id } },
+    { $group: { _id: null, total: { $sum: '$amount' } } }
+  ]);
+  res.json(enrich(project.toObject(), revAgg[0]?.total || 0));
+}));
 
 export default r;

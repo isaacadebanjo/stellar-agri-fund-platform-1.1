@@ -1,45 +1,57 @@
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
-import { db } from '../db.js';
+import Farmer from '../models/Farmer.js';
+import Project from '../models/Project.js';
+import Payout from '../models/Payout.js';
+import { asyncH } from './_async.js';
 
 const r = Router();
 
-function enrich(farmer) {
-  const farmerPayouts = db.data.payouts.filter(p => p.farmerId === farmer.id);
+async function enrich(farmer, payouts, projectsById) {
+  const farmerPayouts = payouts.filter(p => p.farmerId === farmer._id);
   const totalReceived = farmerPayouts.reduce((s, p) => s + p.amount, 0);
   const projectIds = Array.from(new Set([
     ...(farmer.assignedProjects || []),
     ...farmerPayouts.map(p => p.projectId)
   ]));
   const projects = projectIds
-    .map(pid => db.data.projects.find(p => p.id === pid))
+    .map(pid => projectsById.get(pid))
     .filter(Boolean)
-    .map(p => ({ id: p.id, name: p.name }));
+    .map(p => ({ id: p._id, name: p.name }));
   return {
-    ...farmer,
+    id: farmer._id,
+    name: farmer.name,
+    walletId: farmer.walletId || '',
+    assignedProjects: farmer.assignedProjects || [],
+    createdAt: farmer.createdAt,
     totalReceived: +totalReceived.toFixed(2),
     payoutCount: farmerPayouts.length,
     projects
   };
 }
 
-r.get('/', (req, res) => {
-  res.json(db.data.farmers.map(enrich));
-});
+r.get('/', asyncH(async (req, res) => {
+  const [farmers, payouts, projects] = await Promise.all([
+    Farmer.find().sort({ createdAt: 1 }).lean(),
+    Payout.find().lean(),
+    Project.find().lean()
+  ]);
+  const projectsById = new Map(projects.map(p => [p._id, p]));
+  const out = await Promise.all(farmers.map(f => enrich(f, payouts, projectsById)));
+  res.json(out);
+}));
 
-r.post('/', async (req, res) => {
+r.post('/', asyncH(async (req, res) => {
   const { name, walletId, assignedProjects } = req.body || {};
   if (!name) return res.status(400).json({ error: 'name required' });
-  const farmer = {
-    id: nanoid(8),
+  const farmer = await Farmer.create({
     name: name.trim(),
     walletId: walletId || '',
-    assignedProjects: Array.isArray(assignedProjects) ? assignedProjects : [],
-    createdAt: new Date().toISOString()
-  };
-  db.data.farmers.push(farmer);
-  await db.write();
-  res.status(201).json(enrich(farmer));
-});
+    assignedProjects: Array.isArray(assignedProjects) ? assignedProjects : []
+  });
+  // First-load enrich (no payouts yet)
+  const projects = await Project.find({ _id: { $in: farmer.assignedProjects } }).lean();
+  const projectsById = new Map(projects.map(p => [p._id, p]));
+  res.status(201).json(await enrich(farmer.toObject(), [], projectsById));
+}));
 
 export default r;

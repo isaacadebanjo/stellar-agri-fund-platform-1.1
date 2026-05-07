@@ -1,19 +1,29 @@
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
-import { db } from '../db.js';
+import Distribution from '../models/Distribution.js';
+import Investor from '../models/Investor.js';
+import Project from '../models/Project.js';
+import Revenue from '../models/Revenue.js';
+import Transaction from '../models/Transaction.js';
+import { asyncH } from './_async.js';
 
 const r = Router();
 
 // Compute each investor's share of total invested capital across the treasury.
 // Investors fund the treasury, the treasury allocates to projects — there is no
 // per-investor-per-project link, so we approximate share-of-pool.
-function investorShares() {
+async function investorShares() {
+  const investors = await Investor.find().lean();
+  const investorByWallet = new Map(investors.map(i => [i.walletId, i._id]));
+
+  const txAgg = await Transaction.aggregate([
+    { $match: { stage: 'investment' } },
+    { $group: { _id: '$senderId', total: { $sum: '$amount' } } }
+  ]);
   const totals = {};
-  for (const tx of db.data.transactions) {
-    if (tx.stage !== 'investment') continue;
-    const inv = db.data.investors.find(i => i.walletId === tx.senderId);
-    if (!inv) continue;
-    totals[inv.id] = (totals[inv.id] || 0) + tx.amount;
+  for (const row of txAgg) {
+    const investorId = investorByWallet.get(row._id);
+    if (!investorId) continue;
+    totals[investorId] = (totals[investorId] || 0) + row.total;
   }
   const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0);
   return Object.entries(totals).map(([investorId, invested]) => ({
@@ -23,47 +33,65 @@ function investorShares() {
   }));
 }
 
-function enrich(d) {
-  const inv = db.data.investors.find(i => i.id === d.investorId);
-  const proj = db.data.projects.find(p => p.id === d.projectId);
+async function enrichDistribution(d) {
+  const [inv, proj] = await Promise.all([
+    Investor.findById(d.investorId).lean(),
+    Project.findById(d.projectId).lean()
+  ]);
   return {
-    ...d,
+    ...d.toJSON?.() ?? d,
     investorName: inv?.name || 'Unknown',
     projectName: proj?.name || 'Unknown'
   };
 }
 
-r.get('/', (req, res) => {
+r.get('/', asyncH(async (req, res) => {
   const { investorId, projectId } = req.query;
-  let rows = db.data.distributions;
-  if (investorId) rows = rows.filter(d => d.investorId === investorId);
-  if (projectId) rows = rows.filter(d => d.projectId === projectId);
-  const sorted = [...rows].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-  res.json(sorted.map(enrich));
-});
+  const filter = {};
+  if (investorId) filter.investorId = investorId;
+  if (projectId) filter.projectId = projectId;
+  const dists = await Distribution.find(filter).sort({ timestamp: -1 });
+
+  // Bulk fetch investor + project names to avoid N+1.
+  const invIds = [...new Set(dists.map(d => d.investorId))];
+  const projIds = [...new Set(dists.map(d => d.projectId))];
+  const [investors, projects] = await Promise.all([
+    Investor.find({ _id: { $in: invIds } }).lean(),
+    Project.find({ _id: { $in: projIds } }).lean()
+  ]);
+  const invMap = new Map(investors.map(i => [i._id, i.name]));
+  const projMap = new Map(projects.map(p => [p._id, p.name]));
+  res.json(dists.map(d => ({
+    ...d.toJSON(),
+    investorName: invMap.get(d.investorId) || 'Unknown',
+    projectName: projMap.get(d.projectId) || 'Unknown'
+  })));
+}));
 
 // Preview the distribution split for a project without persisting it.
-r.get('/preview/:projectId', (req, res) => {
-  const project = db.data.projects.find(p => p.id === req.params.projectId);
+r.get('/preview/:projectId', asyncH(async (req, res) => {
+  const project = await Project.findById(req.params.projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });
   const platformFeePercent = Number(req.query.platformFeePercent ?? 10);
 
-  const revenue = db.data.revenue
-    .filter(rev => rev.projectId === project.id)
-    .reduce((s, rev) => s + rev.amount, 0);
+  const revAgg = await Revenue.aggregate([
+    { $match: { projectId: project._id } },
+    { $group: { _id: null, total: { $sum: '$amount' } } }
+  ]);
+  const revenue = revAgg[0]?.total || 0;
   const payouts = project.spent;
   const grossProfit = revenue - payouts;
   const platformFee = grossProfit > 0 ? +(grossProfit * platformFeePercent / 100).toFixed(2) : 0;
   const netProfit = +(grossProfit - platformFee).toFixed(2);
 
-  const shares = investorShares();
+  const shares = await investorShares();
   const breakdown = shares.map(s => ({
     ...s,
     estimatedReturn: netProfit > 0 ? +(netProfit * s.sharePercent / 100).toFixed(2) : 0
   }));
 
   res.json({
-    projectId: project.id,
+    projectId: project._id,
     projectName: project.name,
     revenue: +revenue.toFixed(2),
     payouts: +payouts.toFixed(2),
@@ -73,18 +101,20 @@ r.get('/preview/:projectId', (req, res) => {
     netProfit,
     investors: breakdown
   });
-});
+}));
 
 // Generate (persist) distribution records for a project.
-r.post('/generate', async (req, res) => {
+r.post('/generate', asyncH(async (req, res) => {
   const { projectId, platformFeePercent } = req.body || {};
-  const project = db.data.projects.find(p => p.id === projectId);
+  const project = await Project.findById(projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });
   const feePct = Number(platformFeePercent ?? 10);
 
-  const revenue = db.data.revenue
-    .filter(rev => rev.projectId === project.id)
-    .reduce((s, rev) => s + rev.amount, 0);
+  const revAgg = await Revenue.aggregate([
+    { $match: { projectId: project._id } },
+    { $group: { _id: null, total: { $sum: '$amount' } } }
+  ]);
+  const revenue = revAgg[0]?.total || 0;
   const payouts = project.spent;
   const grossProfit = revenue - payouts;
   if (grossProfit <= 0) {
@@ -93,18 +123,17 @@ r.post('/generate', async (req, res) => {
   const platformFee = +(grossProfit * feePct / 100).toFixed(2);
   const netProfit = +(grossProfit - platformFee).toFixed(2);
 
-  const shares = investorShares();
+  const shares = await investorShares();
   if (shares.length === 0) {
     return res.status(400).json({ error: 'No investors with funded investments yet.' });
   }
 
-  const now = new Date().toISOString();
-  const created = shares
+  const now = new Date();
+  const docs = shares
     .filter(s => s.sharePercent > 0)
     .map(s => ({
-      id: nanoid(10),
       investorId: s.investorId,
-      projectId: project.id,
+      projectId: project._id,
       amount: +(netProfit * s.sharePercent / 100).toFixed(2),
       sharePercent: s.sharePercent,
       platformFeePercent: feePct,
@@ -113,27 +142,29 @@ r.post('/generate', async (req, res) => {
       status: 'pending',
       timestamp: now
     }));
+  const created = await Distribution.insertMany(docs);
 
-  db.data.distributions.push(...created);
-  await db.write();
+  const enriched = await Promise.all(created.map(enrichDistribution));
+
   res.status(201).json({
-    projectId: project.id,
+    projectId: project._id,
     projectName: project.name,
     grossProfit: +grossProfit.toFixed(2),
     platformFee,
     netProfit,
-    distributions: created.map(enrich)
+    distributions: enriched
   });
-});
+}));
 
 // Mark a distribution as paid (mock — no real transfer).
-r.post('/:id/mark-paid', async (req, res) => {
-  const dist = db.data.distributions.find(d => d.id === req.params.id);
+r.post('/:id/mark-paid', asyncH(async (req, res) => {
+  const dist = await Distribution.findByIdAndUpdate(
+    req.params.id,
+    { status: 'paid', paidAt: new Date() },
+    { new: true }
+  );
   if (!dist) return res.status(404).json({ error: 'distribution not found' });
-  dist.status = 'paid';
-  dist.paidAt = new Date().toISOString();
-  await db.write();
-  res.json(enrich(dist));
-});
+  res.json(await enrichDistribution(dist));
+}));
 
 export default r;
