@@ -1,0 +1,132 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900 font-sans antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+  table {
+    @apply w-full text-sm;
+  }
+  th {
+    @apply text-[11px] uppercase tracking-wider font-medium text-slate-500 px-4 py-3 text-left bg-slate-50/60;
+  }
+  td {
+    @apply px-4 py-3 align-middle border-t border-slate-100 text-slate-700;
+  }
+  tbody tr {
+    @apply transition-colors hover:bg-slate-50/60;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium
+           transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-offset-1
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-brand-700 text-white hover:bg-brand-800 active:bg-brand-900 shadow-sm
+           focus:ring-brand-500;
+  }
+  .btn-ghost {
+    @apply btn bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300
+           focus:ring-slate-300;
+  }
+  .btn-danger {
+    @apply btn bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-400;
+  }
+
+  .input,
+  .select,
+  .textarea {
+    @apply block rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900
+           placeholder:text-slate-400 shadow-sm transition-colors
+           focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500
+           disabled:bg-slate-50 disabled:text-slate-400;
+  }
+
+  .card {
+    @apply bg-white border border-slate-200 rounded-xl shadow-card;
+  }
+  .section {
+    @apply card p-5 mb-5;
+  }
+  .section-title {
+    @apply text-sm font-semibold text-slate-900 tracking-tight;
+  }
+  .section-sub {
+    @apply text-xs text-slate-500 mt-0.5;
+  }
+
+  .stat-card {
+    @apply card p-5 transition-shadow hover:shadow-pop;
+  }
+  .stat-label {
+    @apply text-[11px] font-medium uppercase tracking-wider text-slate-500;
+  }
+  .stat-value {
+    @apply text-2xl font-semibold text-slate-900 mt-1.5 tabular-nums;
+  }
+  .stat-sub {
+    @apply text-xs text-slate-500 mt-1;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1 ring-inset;
+  }
+  .badge-dot {
+    @apply h-1.5 w-1.5 rounded-full;
+  }
+
+  .badge-investment { @apply bg-blue-50 text-blue-700 ring-blue-200; }
+  .badge-allocation { @apply bg-amber-50 text-amber-700 ring-amber-200; }
+  .badge-payout     { @apply bg-emerald-50 text-emerald-700 ring-emerald-200; }
+  .badge-active     { @apply bg-emerald-50 text-emerald-700 ring-emerald-200; }
+  .badge-paused     { @apply bg-amber-50 text-amber-700 ring-amber-200; }
+  .badge-completed  { @apply bg-indigo-50 text-indigo-700 ring-indigo-200; }
+  .badge-cancelled  { @apply bg-rose-50 text-rose-700 ring-rose-200; }
+  .badge-pending    { @apply bg-amber-50 text-amber-700 ring-amber-200; }
+  .badge-paid       { @apply bg-emerald-50 text-emerald-700 ring-emerald-200; }
+  .badge-neutral    { @apply bg-slate-100 text-slate-600 ring-slate-200; }
+
+  .mono {
+    @apply font-mono text-xs text-slate-500;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600
+           transition-colors hover:bg-slate-100 hover:text-slate-900;
+  }
+  .nav-link-active {
+    @apply bg-brand-50 text-brand-800 hover:bg-brand-50 hover:text-brand-900;
+  }
+
+  .table-wrap {
+    @apply overflow-x-auto rounded-lg border border-slate-200 bg-white;
+  }
+  .table-wrap table {
+    @apply border-separate border-spacing-0;
+  }
+  .table-wrap thead th:first-child { @apply rounded-tl-lg; }
+  .table-wrap thead th:last-child  { @apply rounded-tr-lg; }
+}
+
+/* Recharts polish */
+.recharts-default-tooltip {
+  @apply !rounded-lg !border !border-slate-200 !shadow-pop !bg-white !text-xs;
+}
+.recharts-tooltip-label {
+  @apply !text-slate-500 !font-medium;
+}
+.recharts-cartesian-axis-tick-value {
+  fill: #64748b !important;
+}

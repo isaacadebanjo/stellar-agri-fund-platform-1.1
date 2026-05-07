@@ -1,0 +1,32 @@
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Claude Code local settings (machine-specific)
+.claude/
+
+# Env / secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts (subdirs already cover node_modules / dist / data.json)
+
+# Local-only docs / build scripts (not for the repo)
+*.pptx
+*.docx
+*.pdf
+build_doc.py
+build_ppt.py
