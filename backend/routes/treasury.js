@@ -10,6 +10,19 @@ import {
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
+
+/**
+ * GET /api/treasury/health
+ * Simple health check - no auth required. Useful for verifying endpoint is accessible.
+ */
+r.get('/health', asyncH(async (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Treasury API is running',
+    timestamp: new Date().toISOString()
+  });
+}));
+
 r.use(requireRole('admin'));
 
 /**

@@ -11,27 +11,40 @@ export default function TreasuryWallet({ loading }) {
     const fetchWallet = async () => {
       try {
         setWalletLoading(true);
+        const token = localStorage.getItem('agri_token');
+        if (!token) {
+          setWalletInfo(null);
+          return;
+        }
+        
         const response = await fetch('/api/dashboard', {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('agri_token')}`
+            'Authorization': `Bearer ${token}`
           }
         });
-        if (!response.ok) throw new Error('Failed to fetch wallet');
+        if (!response.ok) {
+          console.warn('Dashboard fetch failed:', response.status);
+          setWalletInfo(null);
+          return;
+        }
         const data = await response.json();
         
         // Extract treasury wallet from dashboard response
         if (data.treasury) {
           setWalletInfo(data.treasury);
+        } else {
+          setWalletInfo(null);
         }
       } catch (err) {
         console.error('Error fetching treasury wallet:', err);
+        setWalletInfo(null);
       } finally {
         setWalletLoading(false);
       }
     };
 
     fetchWallet();
-  }, [loading]);
+  }, []);
 
   const fmt = (val) => {
     if (val === null || val === undefined) return '—';

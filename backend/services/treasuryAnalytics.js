@@ -13,8 +13,28 @@ import { getLiveBalance } from './stellar.js';
 export async function getTreasuryOverview() {
   try {
     // Fetch treasury wallet
-    const treasury = await getTreasury();
-    if (!treasury) throw new Error('Treasury wallet not initialized');
+    let treasury = await getTreasury();
+    
+    // If treasury doesn't exist, create default values
+    if (!treasury) {
+      console.warn('[treasury] Treasury wallet not found, returning zero values');
+      return {
+        treasuryBalance: 0,
+        totalInvestedCapital: 0,
+        totalAllocatedCapital: 0,
+        pendingPayouts: 0,
+        pendingDistributions: 0,
+        totalRevenue: 0,
+        netPlatformPosition: 0,
+        availableLiquidity: 0,
+        capitalUtilizationPercent: 0,
+        liquidityHealth: 'Healthy',
+        timestamp: new Date().toISOString(),
+        debug: { note: 'Treasury wallet not initialized' }
+      };
+    }
+
+    console.log('[treasury] Treasury wallet found:', treasury._id, 'balance:', treasury.balance);
 
     // Get live balance from Stellar testnet
     let treasuryBalance = 0;

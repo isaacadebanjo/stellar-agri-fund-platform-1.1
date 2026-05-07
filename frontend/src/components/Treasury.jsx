@@ -23,25 +23,50 @@ export default function Treasury() {
         setError('');
 
         const token = localStorage.getItem('agri_token');
+        if (!token) {
+          setError('Not authenticated. Please log in.');
+          setLoading(false);
+          return;
+        }
+
         const headers = { 'Authorization': `Bearer ${token}` };
 
         // Fetch overview
-        const overviewRes = await fetch('/api/treasury/overview', { headers });
-        if (!overviewRes.ok) throw new Error('Failed to fetch treasury overview');
+        let overviewRes;
+        try {
+          overviewRes = await fetch('/api/treasury/overview', { headers });
+        } catch (networkErr) {
+          throw new Error(`Network error: ${networkErr.message}`);
+        }
+
+        if (!overviewRes.ok) {
+          const errorText = await overviewRes.text().catch(() => 'Unknown error');
+          const errorData = (() => { try { return JSON.parse(errorText); } catch { return { error: errorText }; } })();
+          throw new Error(errorData.error || `HTTP ${overviewRes.status}: ${errorText}`);
+        }
+
         const overviewData = await overviewRes.json();
         setOverview(overviewData);
 
-        // Fetch flows (historical data)
+        // Fetch flows (historical data) - non-blocking if fails
         const flowsRes = await fetch('/api/treasury/flows?days=90', { headers });
-        if (!flowsRes.ok) throw new Error('Failed to fetch treasury flows');
-        const flowsData = await flowsRes.json();
-        setFlows(flowsData);
+        if (flowsRes.ok) {
+          const flowsData = await flowsRes.json();
+          setFlows(flowsData);
+        } else {
+          console.warn('Failed to fetch flows:', flowsRes.status);
+          setFlows([]);
+        }
 
-        // Fetch obligations
+        // Fetch obligations - non-blocking if fails
         const obligationsRes = await fetch('/api/treasury/obligations', { headers });
-        if (!obligationsRes.ok) throw new Error('Failed to fetch pending obligations');
-        const obligationsData = await obligationsRes.json();
-        setObligations(obligationsData);
+        if (obligationsRes.ok) {
+          const obligationsData = await obligationsRes.json();
+          setObligations(obligationsData);
+        } else {
+          console.warn('Failed to fetch obligations:', obligationsRes.status);
+          setObligations(null);
+        }
       } catch (e) {
         setError(e.message || 'Failed to load treasury data');
         console.error('Treasury error:', e);
