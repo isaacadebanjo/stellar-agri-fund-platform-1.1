@@ -17,6 +17,7 @@ import reports from './routes/reports.js';
 import activity from './routes/activity.js';
 import statements from './routes/statements.js';
 import treasury from './routes/treasury.js';
+import events from './routes/events.js';
 
 const app = express();
 app.use(cors());
@@ -25,6 +26,11 @@ app.use(express.json());
 // Public endpoints (no auth required)
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 app.use('/api/auth', auth);
+
+// SSE stream — handles its own JWT check via query param because
+// EventSource cannot send Authorization headers. Must be mounted BEFORE
+// the requireAuth middleware below.
+app.use('/api/events', events);
 
 // Everything below requires a valid JWT. Per-route role checks live in
 // the route files themselves (e.g. requireRole('admin') for write paths).

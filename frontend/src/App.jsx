@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Dashboard from './components/Dashboard.jsx';
 import Investors from './components/Investors.jsx';
 import InvestorDashboard from './components/InvestorDashboard.jsx';
@@ -12,7 +12,14 @@ import Reports from './components/Reports.jsx';
 import Activity from './components/Activity.jsx';
 import Treasury from './components/Treasury.jsx';
 import Login from './components/Login.jsx';
+import InstallPrompt from './components/InstallPrompt.jsx';
 import { useAuth } from './auth.jsx';
+import { useEventStream } from './useEventStream.js';
+
+// Activity types that change persisted state — these should trigger a
+// re-fetch in the open view. Read-only / session events are skipped so we
+// don't thrash the API for things nobody cares about.
+const SILENT_ACTIONS = new Set(['LOGIN', 'LOGOUT', 'VIEW_TREASURY_REPORT']);
 
 const NAV = [
   {
@@ -81,7 +88,26 @@ function Shell({ user, logout }) {
   const [tab, setTab] = useState(defaultTab);
   const [refreshKey, setRefreshKey] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [liveTick, setLiveTick] = useState(null);
   const refresh = () => setRefreshKey(k => k + 1);
+
+  // Debounce burst events (e.g. a distribution run that writes 20 rows)
+  // into a single refresh so we don't hammer the API.
+  const refreshTimer = useRef(null);
+  function scheduleRefresh() {
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => {
+      refreshTimer.current = null;
+      refresh();
+      setLiveTick(Date.now());
+    }, 250);
+  }
+
+  useEventStream((event) => {
+    if (event?.type !== 'activity') return;
+    if (SILENT_ACTIONS.has(event.actionType)) return;
+    scheduleRefresh();
+  });
 
   // If the active tab isn't in the user's allowed list, drop back to default.
   useEffect(() => {
@@ -175,6 +201,7 @@ function Shell({ user, logout }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <LiveBadge tick={liveTick} />
               <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Stellar testnet · XLM
@@ -210,7 +237,34 @@ function Shell({ user, logout }) {
           )}
         </main>
       </div>
+
+      <InstallPrompt />
     </div>
+  );
+}
+
+/* ------- live indicator ------- */
+function LiveBadge({ tick }) {
+  const [flash, setFlash] = useState(false);
+  useEffect(() => {
+    if (tick == null) return;
+    setFlash(true);
+    const t = setTimeout(() => setFlash(false), 1500);
+    return () => clearTimeout(t);
+  }, [tick]);
+  return (
+    <span
+      title={tick ? `Last update ${new Date(tick).toLocaleTimeString()}` : 'Realtime updates'}
+      className={
+        'hidden sm:inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 ring-inset transition-colors ' +
+        (flash
+          ? 'bg-brand-100 text-brand-800 ring-brand-300'
+          : 'bg-slate-50 text-slate-600 ring-slate-200')
+      }
+    >
+      <span className={'h-1.5 w-1.5 rounded-full ' + (flash ? 'bg-brand-500' : 'bg-slate-400') + ' animate-pulse'} />
+      {flash ? 'Updated' : 'Live'}
+    </span>
   );
 }
 

@@ -1,4 +1,21 @@
 import ActivityLog, { ActivityTypes, EntityTypes, ActivityStatus } from '../models/ActivityLog.js';
+import { broadcast } from './eventBus.js';
+
+function broadcastActivity(doc) {
+  broadcast({
+    type: 'activity',
+    actionType: doc.actionType,
+    entityType: doc.entityType,
+    entityId: doc.entityId,
+    description: doc.description,
+    userId: doc.userId,
+    userRole: doc.userRole,
+    txHash: doc.txHash,
+    status: doc.status,
+    metadata: doc.metadata,
+    ts: (doc.createdAt || new Date()).toISOString?.() || new Date().toISOString()
+  });
+}
 
 /**
  * Centralized activity logging service.
@@ -30,7 +47,7 @@ export async function logActivity({
     // Fire and forget: don't wait for the log to be persisted
     setImmediate(async () => {
       try {
-        await ActivityLog.create({
+        const doc = await ActivityLog.create({
           userId: userId || null,
           userRole,
           actionType,
@@ -41,6 +58,7 @@ export async function logActivity({
           status,
           metadata: metadata || null
         });
+        broadcastActivity(doc);
       } catch (err) {
         console.error('[ActivityLog] Failed to create log:', err.message);
       }
@@ -65,7 +83,7 @@ export async function logActivitySync({
   status = ActivityStatus.SUCCESS,
   metadata
 }) {
-  return ActivityLog.create({
+  const doc = await ActivityLog.create({
     userId: userId || null,
     userRole,
     actionType,
@@ -76,6 +94,8 @@ export async function logActivitySync({
     status,
     metadata: metadata || null
   });
+  broadcastActivity(doc);
+  return doc;
 }
 
 export { ActivityTypes, EntityTypes, ActivityStatus };
