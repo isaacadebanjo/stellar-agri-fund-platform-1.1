@@ -31,3 +31,7 @@ services:
         value: "false" # never seed demo data in production
       - key: STELLAR_HORIZON_URL
         value: https://horizon-testnet.stellar.org  # testnet only — mainnet is rejected at boot
+      - key: SEP10_SERVER_SECRET
+        sync: false   # optional: Stellar secret (S...) enabling non-custodial wallet login (testnet)
+      - key: SEP10_HOME_DOMAIN
+        value: agri-funds.testnet  # label embedded in SEP-10 challenges

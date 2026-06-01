@@ -79,6 +79,8 @@ Manual setup (no Blueprint) — create a **Web Service** with:
 | `STELLAR_HORIZON_URL` | no | Defaults to testnet. **Mainnet (`horizon.stellar.org`/pubnet) is rejected at boot** |
 | `STELLAR_FRIENDBOT_ENABLED` | no | Default `true`. Set `false` to disable the testnet faucet |
 | `STELLAR_FRIENDBOT_TIMEOUT_MS` | no | Friendbot timeout in ms. Default `30000` |
+| `SEP10_SERVER_SECRET` | no | Enables non-custodial wallet login (SEP-10). Stellar secret seed (`S...`), **testnet only**, distinct from any wallet keys. Unset = wallet login disabled |
+| `SEP10_HOME_DOMAIN` | no | Label embedded in SEP-10 challenges. Default `agri-funds.testnet` |
 | `SEED_DEMO_USERS` | no | Leave `false` in production |
 | `PORT` | no | Injected by Render automatically |
 
@@ -119,12 +121,38 @@ The frontend opens an `EventSource` straight to the Render API (`<VITE_API_BASE_
 - Every transaction is signed with the **testnet** network passphrase, and the Horizon URL is validated at boot — the app cannot move real (mainnet) funds.
 - **Friendbot** is the testnet faucet used to fund new wallets (treasury + each new investor). It is testnet-only, time-boxed (so a flaky faucet can't hang a request), and can be turned off with `STELLAR_FRIENDBOT_ENABLED=false`.
 
+## Non-custodial wallet login (Freighter & Albedo)
+
+Investors can sign in with their own Stellar wallet instead of an admin-created custodial account. The app proves wallet ownership with a **SEP-10** challenge/verify handshake — the server never sees a private key.
+
+**Supported wallets (testnet):**
+- **[Freighter](https://www.freighter.app/)** — browser extension. The user must install it and set its network to **Test Net**. The app refuses to proceed if Freighter is on mainnet.
+- **[Albedo](https://albedo.link/)** — web popup, no installation required.
+
+**How it works:**
+1. The user clicks *Connect Freighter / Albedo* on the login screen.
+2. The wallet returns its public key; the backend issues a SEP-10 challenge transaction (`GET /api/auth/wallet/challenge`).
+3. The wallet signs the challenge (testnet passphrase); the backend verifies the signature (`POST /api/auth/wallet/verify`) and, on success, **finds-or-creates a non-custodial Investor** keyed by that public key and issues the same JWT session the password flow uses.
+4. The connected key shows in the header with a **Disconnect** action; the investor dashboard displays the wallet's **live on-chain testnet balance**.
+
+**Enabling it:**
+- Set **`SEP10_SERVER_SECRET`** on the backend to a testnet Stellar secret seed (the signing key for challenges). Generate one with:
+  ```bash
+  node -e "import('stellar-sdk').then(s => console.log(s.Keypair.random().secret()))"
+  ```
+- Optionally set `SEP10_HOME_DOMAIN` (default `agri-funds.testnet`).
+- When `SEP10_SERVER_SECRET` is **unset**, the wallet buttons return "wallet login is not enabled" and the existing admin/custodial flows are completely unaffected.
+
+No frontend env vars are needed — the wallet libraries (`@stellar/freighter-api`, `@albedo-link/intent`) are bundled and lazy-loaded only when the user clicks Connect.
+
 ## API (selected)
 
 ```
 GET  /api/health                     # public; reports DB connectivity
 POST /api/auth/login                 { email, password }
 GET  /api/auth/me
+GET  /api/auth/wallet/challenge      ?account=G…             # SEP-10 challenge (testnet)
+POST /api/auth/wallet/verify         { transaction }         # SEP-10 verify → JWT
 GET  /api/events?ticket=…            # SSE stream (ticket from /api/events/ticket)
 
 GET  /api/dashboard

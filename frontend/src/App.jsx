@@ -13,6 +13,7 @@ import Activity from './components/Activity.jsx';
 import Treasury from './components/Treasury.jsx';
 import Login from './components/Login.jsx';
 import InstallPrompt from './components/InstallPrompt.jsx';
+import { WalletBadge } from './components/ConnectWallet.jsx';
 import { useAuth } from './auth.jsx';
 import { useEventStream } from './useEventStream.js';
 import {
@@ -206,6 +207,7 @@ function Shell({ user, logout }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <WalletBadge />
               <LiveBadge tick={liveTick} />
               <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />

@@ -70,6 +70,19 @@ r.get('/:id/summary', requireSelfOrAdmin(req => req.params.id), asyncH(async (re
   if (!investor) return res.status(404).json({ error: 'investor not found' });
   const wallet = await Wallet.findById(investor.walletId);
 
+  // Custodial investors have a server-managed Wallet. Non-custodial investors
+  // connected their own wallet — show its live testnet balance from Horizon.
+  let walletInfo = wallet
+    ? { id: wallet._id, publicKey: wallet.publicKey, balance: wallet.balance, custodial: true }
+    : null;
+  if (!walletInfo && investor.stellarPublicKey) {
+    let liveBalance = 0;
+    try {
+      liveBalance = await getLiveBalance(investor.stellarPublicKey);
+    } catch { /* unfunded / Horizon unreachable — fall back to 0 */ }
+    walletInfo = { id: null, publicKey: investor.stellarPublicKey, balance: liveBalance, custodial: false };
+  }
+
   const investmentTxs = await Transaction.find({
     stage: 'investment',
     senderId: investor.walletId
@@ -100,12 +113,18 @@ r.get('/:id/summary', requireSelfOrAdmin(req => req.params.id), asyncH(async (re
   }).filter(Boolean);
 
   const currentEstimatedValue = round(
-    (wallet?.balance || 0) + totalInvested + totalReturns
+    (walletInfo?.balance || 0) + totalInvested + totalReturns
   );
 
   res.json({
-    investor: { id: investor._id, name: investor.name, email: investor.email },
-    wallet: wallet ? { id: wallet._id, publicKey: wallet.publicKey, balance: wallet.balance } : null,
+    investor: {
+      id: investor._id,
+      name: investor.name,
+      email: investor.email,
+      custodial: investor.custodial !== false,
+      stellarPublicKey: investor.stellarPublicKey || null
+    },
+    wallet: walletInfo,
     totals: {
       invested: round(totalInvested),
       returns: round(totalReturns),

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api, tokenStore, setOnUnauthorized } from './api.js';
+import { WALLETS, rememberWalletProvider, clearWalletProvider } from './wallet.js';
 
 const AuthCtx = createContext(null);
 
@@ -47,14 +48,36 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // Non-custodial login via a connected Stellar wallet (Freighter/Albedo).
+  // SEP-10 handshake: connect → fetch challenge → sign in-wallet → verify.
+  const loginWithWallet = useCallback(async (providerId) => {
+    setError('');
+    const wallet = WALLETS[providerId];
+    if (!wallet) throw new Error('Unknown wallet provider');
+    try {
+      const publicKey = await wallet.getKey();
+      const { transaction } = await api.auth.walletChallenge(publicKey);
+      const signedXdr = await wallet.sign(transaction, publicKey);
+      const { token, user: u } = await api.auth.walletVerify(signedXdr);
+      tokenStore.set(token);
+      rememberWalletProvider(providerId);
+      setUser(u);
+      return u;
+    } catch (e) {
+      setError(e.message);
+      throw e;
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     try { await api.auth.logout(); } catch { /* ignore */ }
     tokenStore.clear();
+    clearWalletProvider();
     setUser(null);
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, error, login, logout }}>
+    <AuthCtx.Provider value={{ user, loading, error, login, loginWithWallet, logout }}>
       {children}
     </AuthCtx.Provider>
   );

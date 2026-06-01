@@ -82,7 +82,16 @@ export default function InvestorDashboard({ refreshKey, forcedInvestorId = null,
           </Cards>
 
           <Cards cols={3}>
-            <StatCard label="Wallet Balance" value={fmt(summary.wallet?.balance)} sub="XLM on testnet" />
+            <StatCard
+              label="Wallet Balance"
+              value={fmt(summary.wallet?.balance)}
+              sub={
+                summary.wallet?.custodial === false && summary.wallet?.publicKey
+                  ? `Connected ${summary.wallet.publicKey.slice(0, 4)}…${summary.wallet.publicKey.slice(-4)} · live on testnet`
+                  : 'XLM on testnet'
+              }
+              accent={summary.wallet?.custodial === false ? 'WALLET' : undefined}
+            />
             <StatCard label="Projects Invested In" value={summary.totals.projectsCount} />
             <StatCard label="Investment Tx Count" value={summary.totals.transactionsCount} />
           </Cards>

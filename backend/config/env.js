@@ -48,6 +48,13 @@ export function validateEnv() {
     }
   }
 
+  // Optional non-custodial wallet login (SEP-10). If the signing secret is set,
+  // it must be a structurally valid Stellar secret seed (S..., base32, len 56).
+  const sep10 = process.env.SEP10_SERVER_SECRET;
+  if (sep10 && !/^S[A-Z2-7]{55}$/.test(sep10)) {
+    errors.push('SEP10_SERVER_SECRET must be a valid Stellar secret seed (S...).');
+  }
+
   // The app is testnet-only. Surface a mainnet Horizon misconfig as an error
   // here too (stellar.js also hard-blocks it at import time).
   const horizon = process.env.STELLAR_HORIZON_URL;

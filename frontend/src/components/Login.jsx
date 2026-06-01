@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../auth.jsx';
 import { Button, Input, Field, ErrorBanner } from './ui.jsx';
+import ConnectWallet from './ConnectWallet.jsx';
 
 const DEMOS = [
   { label: 'Admin',    email: 'admin@agri.io',    password: 'admin123'    },
@@ -68,6 +69,11 @@ export default function Login() {
               {busy ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>
+
+          {/* Non-custodial wallet login (Freighter / Albedo, testnet). */}
+          <div className="mt-6 pt-5 border-t border-slate-200">
+            <ConnectWallet />
+          </div>
 
           <div className="mt-6 pt-5 border-t border-slate-200">
             <div className="text-[11px] font-medium uppercase tracking-wider text-slate-500 mb-2">

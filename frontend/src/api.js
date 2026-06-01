@@ -54,7 +54,11 @@ export const api = {
     login: (email, password) => request('POST', '/api/auth/login', { email, password }),
     me: () => request('GET', '/api/auth/me'),
     refresh: () => request('POST', '/api/auth/refresh'),
-    logout: () => request('POST', '/api/auth/logout')
+    logout: () => request('POST', '/api/auth/logout'),
+    // SEP-10 non-custodial wallet login (testnet).
+    walletChallenge: (account) =>
+      request('GET', `/api/auth/wallet/challenge?account=${encodeURIComponent(account)}`),
+    walletVerify: (transaction) => request('POST', '/api/auth/wallet/verify', { transaction })
   },
   dashboard: () => request('GET', '/api/dashboard'),
   investors: {
