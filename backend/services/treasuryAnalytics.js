@@ -1,70 +1,64 @@
 import Transaction from '../models/Transaction.js';
 import Distribution from '../models/Distribution.js';
-import Payout from '../models/Payout.js';
 import Revenue from '../models/Revenue.js';
-import Wallet from '../models/Wallet.js';
 import { getTreasury } from '../config/seed.js';
 import { getLiveBalance } from './stellar.js';
+import { round, sum } from './money.js';
 
 /**
  * Compute comprehensive treasury metrics for dashboard analytics.
  * Non-blocking: fetches data from MongoDB and Stellar testnet, returns aggregated object.
  */
 export async function getTreasuryOverview() {
+  const treasury = await getTreasury();
+
+  // Treasury not seeded yet — return a well-formed zeroed snapshot.
+  if (!treasury) {
+    return {
+      treasuryBalance: 0,
+      totalInvestedCapital: 0,
+      totalAllocatedCapital: 0,
+      pendingPayouts: 0,
+      pendingDistributions: 0,
+      totalRevenue: 0,
+      netPlatformPosition: 0,
+      availableLiquidity: 0,
+      capitalUtilizationPercent: 0,
+      liquidityHealth: 'Healthy',
+      timestamp: new Date().toISOString(),
+      debug: { note: 'Treasury wallet not initialized' }
+    };
+  }
+
+  // Live balance from Stellar; fall back to the last known DB balance.
+  let treasuryBalance;
   try {
-    // Fetch treasury wallet
-    let treasury = await getTreasury();
-    
-    // If treasury doesn't exist, create default values
-    if (!treasury) {
-      console.warn('[treasury] Treasury wallet not found, returning zero values');
-      return {
-        treasuryBalance: 0,
-        totalInvestedCapital: 0,
-        totalAllocatedCapital: 0,
-        pendingPayouts: 0,
-        pendingDistributions: 0,
-        totalRevenue: 0,
-        netPlatformPosition: 0,
-        availableLiquidity: 0,
-        capitalUtilizationPercent: 0,
-        liquidityHealth: 'Healthy',
-        timestamp: new Date().toISOString(),
-        debug: { note: 'Treasury wallet not initialized' }
-      };
-    }
-
-    console.log('[treasury] Treasury wallet found:', treasury._id, 'balance:', treasury.balance);
-
-    // Get live balance from Stellar testnet
-    let treasuryBalance = 0;
-    try {
-      treasuryBalance = await getLiveBalance(treasury.publicKey);
-    } catch (e) {
-      console.warn('[treasury] Failed to fetch live balance:', e.message);
-      treasuryBalance = treasury.balance || 0;
-    }
+    treasuryBalance = await getLiveBalance(treasury.publicKey);
+  } catch (e) {
+    console.warn('[treasury] live balance unavailable, using last known:', e.message);
+    treasuryBalance = treasury.balance || 0;
+  }
 
     // Calculate total invested capital (successful investment transactions)
     const investmentTxs = await Transaction.find({
       stage: 'investment',
       status: 'success'
     });
-    const totalInvestedCapital = investmentTxs.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+    const totalInvestedCapital = sum(investmentTxs, tx => tx.amount || 0);
 
     // Calculate total allocated capital (successful allocation transactions)
     const allocationTxs = await Transaction.find({
       stage: 'allocation',
       status: 'success'
     });
-    const totalAllocatedCapital = allocationTxs.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+    const totalAllocatedCapital = sum(allocationTxs, tx => tx.amount || 0);
 
     // Calculate pending payouts (pending payout transactions)
     const pendingPayoutTxs = await Transaction.find({
       stage: 'payout',
       status: 'pending'
     });
-    const pendingPayouts = pendingPayoutTxs.reduce((sum, tx) => sum + (tx.amount || 0), 0);
+    const pendingPayouts = sum(pendingPayoutTxs, tx => tx.amount || 0);
 
     // Calculate pending distributions
     const pendingDistributions = await Distribution.aggregate([
@@ -103,22 +97,18 @@ export async function getTreasuryOverview() {
     }
 
     return {
-      treasuryBalance,
-      totalInvestedCapital,
-      totalAllocatedCapital,
-      pendingPayouts,
-      pendingDistributions: pendingDistributionsAmount,
-      totalRevenue,
-      netPlatformPosition,
-      availableLiquidity,
+      treasuryBalance: round(treasuryBalance),
+      totalInvestedCapital: round(totalInvestedCapital),
+      totalAllocatedCapital: round(totalAllocatedCapital),
+      pendingPayouts: round(pendingPayouts),
+      pendingDistributions: round(pendingDistributionsAmount),
+      totalRevenue: round(totalRevenue),
+      netPlatformPosition: round(netPlatformPosition),
+      availableLiquidity: round(availableLiquidity),
       capitalUtilizationPercent,
       liquidityHealth,
       timestamp: new Date().toISOString()
     };
-  } catch (e) {
-    console.error('[treasury] Error computing overview:', e);
-    throw e;
-  }
 }
 
 /**
@@ -126,7 +116,6 @@ export async function getTreasuryOverview() {
  * Returns daily aggregated inflows, outflows, and balance trend.
  */
 export async function getTreasuryFlows(days = 90) {
-  try {
     const cutoffDate = new Date();
     cutoffDate.setDate(cutoffDate.getDate() - days);
 
@@ -171,11 +160,22 @@ export async function getTreasuryFlows(days = 90) {
     const flows = Object.values(flowsByDate)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Calculate running balance trend
-    const overview = await getTreasuryOverview();
-    let runningBalance = overview.treasuryBalance - flows.reduce((sum, f) => sum + (f.inflows - f.outflows), 0);
+    // Running-balance trend. Use the treasury's current live balance directly
+    // rather than recomputing the entire overview (which re-runs every
+    // aggregation and an extra Horizon call just for this one number).
+    const treasury = await getTreasury();
+    let currentBalance = 0;
+    if (treasury) {
+      try {
+        currentBalance = await getLiveBalance(treasury.publicKey);
+      } catch {
+        currentBalance = treasury.balance || 0;
+      }
+    }
+    const netFlow = sum(flows, f => f.inflows - f.outflows);
+    let runningBalance = currentBalance - netFlow;
 
-    const balanceTrend = flows.map(f => {
+    return flows.map(f => {
       runningBalance += f.inflows - f.outflows;
       return {
         date: f.date,
@@ -184,27 +184,19 @@ export async function getTreasuryFlows(days = 90) {
         outflows: f.outflows
       };
     });
-
-    return balanceTrend;
-  } catch (e) {
-    console.error('[treasury] Error computing flows:', e);
-    throw e;
-  }
 }
 
 /**
  * Get pending obligations: failed transactions, unpaid distributions, pending payouts.
  */
 export async function getPendingObligations() {
-  try {
-    const [failedTxs, unpaidDistributions, pendingPayoutTxs, payouts] = await Promise.all([
-      Transaction.find({ status: 'failed' }).sort({ timestamp: -1 }).lean(),
-      Distribution.find({ status: 'pending' }).sort({ timestamp: -1 }).lean(),
-      Transaction.find({ stage: 'payout', status: 'pending' }).sort({ timestamp: -1 }).lean(),
-      Payout.find().sort({ timestamp: -1 }).lean()
-    ]);
+  const [failedTxs, unpaidDistributions, pendingPayoutTxs] = await Promise.all([
+    Transaction.find({ status: 'failed' }).sort({ timestamp: -1 }).lean(),
+    Distribution.find({ status: 'pending' }).sort({ timestamp: -1 }).lean(),
+    Transaction.find({ stage: 'payout', status: 'pending' }).sort({ timestamp: -1 }).lean()
+  ]);
 
-    const obligations = {
+  const obligations = {
       failedTransactions: failedTxs.map(tx => ({
         type: 'FAILED_TRANSACTION',
         stage: tx.stage,
@@ -230,63 +222,56 @@ export async function getPendingObligations() {
       }))
     };
 
-    return {
-      total: failedTxs.length + unpaidDistributions.length + pendingPayoutTxs.length,
-      obligations
-    };
-  } catch (e) {
-    console.error('[treasury] Error fetching pending obligations:', e);
-    throw e;
-  }
+  return {
+    total: failedTxs.length + unpaidDistributions.length + pendingPayoutTxs.length,
+    obligations
+  };
 }
 
 /**
  * Get treasury transactions with filtering and pagination.
  */
 export async function getTreasuryTransactions(opts = {}) {
-  try {
-    const { page = 1, limit = 20, status, type } = opts;
-    const skip = (page - 1) * limit;
+  const { page = 1, limit = 20, status, type } = opts;
+  const skip = (page - 1) * limit;
 
-    const query = {};
-    if (status) query.status = status;
-    if (type === 'inflow') {
-      query.stage = 'investment';
-    } else if (type === 'outflow') {
-      query.stage = { $in: ['payout', 'allocation'] };
-    }
-
-    const [transactions, total] = await Promise.all([
-      Transaction.find(query)
-        .sort({ timestamp: -1 })
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Transaction.countDocuments(query)
-    ]);
-
-    return {
-      transactions: transactions.map(tx => ({
-        _id: tx._id,
-        stage: tx.stage,
-        type: tx.stage === 'investment' ? 'Inflow' : tx.stage === 'payout' ? 'Payout' : 'Allocation',
-        amount: tx.amount,
-        senderLabel: tx.senderLabel,
-        receiverLabel: tx.receiverLabel,
-        status: tx.status,
-        txHash: tx.txHash,
-        timestamp: tx.timestamp,
-        network: tx.network
-      })),
-      pagination: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
-      }
-    };
-  } catch (e) {
-    console.error('[treasury] Error fetching transactions:', e);
-    throw e;
+  const query = {};
+  if (status) query.status = status;
+  if (type === 'inflow') {
+    query.stage = 'investment';
+  } else if (type === 'outflow') {
+    query.stage = { $in: ['payout', 'allocation'] };
   }
+
+  const [transactions, total] = await Promise.all([
+    Transaction.find(query)
+      .sort({ timestamp: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean(),
+    Transaction.countDocuments(query)
+  ]);
+
+  return {
+    transactions: transactions.map(tx => ({
+      // `id` to match the rest of the API (the _base.js toJSON transform);
+      // this path uses .lean() so the transform doesn't apply automatically.
+      id: tx._id,
+      stage: tx.stage,
+      type: tx.stage === 'investment' ? 'Inflow' : tx.stage === 'payout' ? 'Payout' : 'Allocation',
+      amount: tx.amount,
+      senderLabel: tx.senderLabel,
+      receiverLabel: tx.receiverLabel,
+      status: tx.status,
+      txHash: tx.txHash,
+      timestamp: tx.timestamp,
+      network: tx.network
+    })),
+    pagination: {
+      page,
+      limit,
+      total,
+      pages: Math.ceil(total / limit)
+    }
+  };
 }

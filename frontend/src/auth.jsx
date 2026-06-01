@@ -18,7 +18,15 @@ export function AuthProvider({ children }) {
     const token = tokenStore.get();
     if (!token) { setLoading(false); return; }
     api.auth.me()
-      .then(({ user }) => setUser(user))
+      .then(async ({ user }) => {
+        setUser(user);
+        // Roll the token (revokes the old one) so an active session keeps a
+        // fresh short-lived token instead of relying on one long-lived JWT.
+        try {
+          const { token: fresh } = await api.auth.refresh();
+          if (fresh) tokenStore.set(fresh);
+        } catch { /* keep the existing token if refresh fails */ }
+      })
       .catch(() => {
         tokenStore.clear();
         setUser(null);

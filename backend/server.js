@@ -1,6 +1,13 @@
+// Load backend/.env if present (local dev convenience only). In production,
+// Render/Vercel inject real env vars and no .env file exists — dotenv is a
+// silent no-op in that case, so nothing here REQUIRES a local .env at runtime.
 import 'dotenv/config';
 import express from 'express';
+import mongoose from 'mongoose';
 import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import { validateEnv } from './config/env.js';
 import { connectDB } from './config/db.js';
 import { seedIfNeeded } from './config/seed.js';
 import { requireAuth } from './middleware/auth.js';
@@ -20,16 +27,59 @@ import treasury from './routes/treasury.js';
 import events from './routes/events.js';
 
 const app = express();
-app.use(cors());
-app.use(express.json());
 
-// Public endpoints (no auth required)
-app.get('/api/health', (req, res) => res.json({ ok: true }));
+// Behind Render's proxy — required for correct req.ip in rate limiting.
+app.set('trust proxy', 1);
+
+// Baseline security headers.
+app.use(helmet());
+
+// Request logging.
+app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+
+// CORS allowlist. Set CORS_ORIGIN to a comma-separated list of allowed
+// frontend origins (e.g. "https://agri-funds.vercel.app"). Requests with no
+// Origin (curl, health checks, same-origin) are always allowed. In non-prod,
+// localhost is permitted so the Vite dev server works without extra config.
+//
+// Vercel generates a unique URL per preview deploy (e.g.
+// https://agri-funds-git-feature-team.vercel.app). Set
+// CORS_ALLOW_VERCEL_PREVIEWS=true to allow any "*.vercel.app" origin so those
+// previews can talk to this API without hand-listing every URL.
+const allowedOrigins = (process.env.CORS_ORIGIN || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+const allowVercelPreviews = process.env.CORS_ALLOW_VERCEL_PREVIEWS === 'true';
+const VERCEL_PREVIEW_RE = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
+const isProd = process.env.NODE_ENV === 'production';
+if (isProd && allowedOrigins.length === 0 && !allowVercelPreviews) {
+  console.warn('[cors] CORS_ORIGIN is not set — all cross-origin requests will be rejected in production.');
+}
+
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    if (allowVercelPreviews && VERCEL_PREVIEW_RE.test(origin)) return cb(null, true);
+    if (!isProd && /^http:\/\/localhost(:\d+)?$/.test(origin)) return cb(null, true);
+    return cb(new Error('Not allowed by CORS'));
+  },
+  credentials: true
+}));
+app.use(express.json({ limit: '100kb' }));
+
+// Public endpoints (no auth required). Health reports DB connectivity so
+// Render's health check fails fast if MongoDB is down.
+app.get('/api/health', (req, res) => {
+  const dbUp = mongoose.connection.readyState === 1;
+  res.status(dbUp ? 200 : 503).json({ ok: dbUp, db: dbUp ? 'connected' : 'disconnected' });
+});
 app.use('/api/auth', auth);
 
-// SSE stream — handles its own JWT check via query param because
-// EventSource cannot send Authorization headers. Must be mounted BEFORE
-// the requireAuth middleware below.
+// SSE: /events/ticket is authenticated and issues a short-lived ticket the
+// stream itself uses (EventSource can't send Authorization headers). Mounted
+// BEFORE the global requireAuth so the public stream route stays reachable.
 app.use('/api/events', events);
 
 // Everything below requires a valid JWT. Per-route role checks live in
@@ -63,11 +113,43 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 4000;
 
+let httpServer = null;
+let shuttingDown = false;
+
+// Drain in-flight requests, then close Mongo, on the SIGTERM Render sends.
+async function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`[shutdown] ${signal} received — closing gracefully`);
+
+  const forceExit = setTimeout(() => {
+    console.error('[shutdown] forced exit after timeout');
+    process.exit(1);
+  }, 10_000).unref();
+
+  try {
+    if (httpServer) {
+      await new Promise((resolve, reject) =>
+        httpServer.close(err => (err ? reject(err) : resolve()))
+      );
+    }
+    await mongoose.connection.close();
+    clearTimeout(forceExit);
+    console.log('[shutdown] clean exit');
+    process.exit(0);
+  } catch (err) {
+    console.error('[shutdown] error during shutdown:', err.message);
+    process.exit(1);
+  }
+}
+
 async function start() {
   try {
+    // Fail fast on a misconfigured deploy, before opening any connections.
+    validateEnv();
     await connectDB();
     await seedIfNeeded();
-    app.listen(PORT, () => {
+    httpServer = app.listen(PORT, () => {
       console.log(`Agri-funds API listening on http://localhost:${PORT}`);
     });
   } catch (err) {
@@ -75,5 +157,8 @@ async function start() {
     process.exit(1);
   }
 }
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 start();

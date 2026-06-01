@@ -11,7 +11,23 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 20
+      - key: NODE_ENV
+        value: production
       - key: MONGODB_URI
         sync: false   # set in the Render dashboard; never committed
       - key: JWT_SECRET
         generateValue: true   # Render auto-generates a random secret on first deploy
+      - key: WALLET_ENC_KEY
+        sync: false   # 64-char hex (32 bytes); set in the Render dashboard, never committed
+      - key: CORS_ORIGIN
+        sync: false   # comma-separated allowed frontend origins (e.g. https://app.vercel.app)
+      - key: CORS_ALLOW_VERCEL_PREVIEWS
+        value: "true" # also allow https://*.vercel.app preview URLs
+      - key: ADMIN_EMAIL
+        sync: false   # email for the seeded admin login
+      - key: ADMIN_PASSWORD
+        sync: false   # required in production; the seeded admin's password
+      - key: SEED_DEMO_USERS
+        value: "false" # never seed demo data in production
+      - key: STELLAR_HORIZON_URL
+        value: https://horizon-testnet.stellar.org  # testnet only — mainnet is rejected at boot

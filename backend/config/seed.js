@@ -7,8 +7,12 @@ import User from '../models/User.js';
 import { createFundedWallet, fundIfMissing, getLiveBalance } from '../services/stellar.js';
 
 // Idempotent: only inserts when collections are missing the expected baseline.
+//
+// Always seeds core infrastructure (treasury wallet, admin user). Demo
+// data (pilot project, demo investor/farmer, demo investor login) is only
+// seeded when SEED_DEMO_USERS=true — never in a default production deploy.
 export async function seedIfNeeded() {
-  // 1. Treasury wallet — friendbot-funded on testnet.
+  // 1. Treasury wallet — friendbot-funded on testnet. Core infra, always.
   let treasury = await Wallet.findOne({ type: 'treasury' });
   if (!treasury) {
     const w = await createFundedWallet();
@@ -25,9 +29,45 @@ export async function seedIfNeeded() {
     await reconcileWallet(treasury, 'treasury');
   }
 
-  // 2. Pilot project
-  const projectCount = await Project.countDocuments();
-  if (projectCount === 0) {
+  // 2. Admin user — always. Credentials come from env; a default password is
+  //    only allowed (and never printed) outside production.
+  await ensureAdminUser();
+
+  // 3. Demo data — opt-in only.
+  if (process.env.SEED_DEMO_USERS !== 'true') {
+    console.log('[seed] SEED_DEMO_USERS not set — skipping demo project/investor/farmer/user');
+    return;
+  }
+  await seedDemoData();
+}
+
+async function ensureAdminUser() {
+  const email = (process.env.ADMIN_EMAIL || 'admin@agri.io').toLowerCase().trim();
+  if (await User.findOne({ email })) return;
+
+  let password = process.env.ADMIN_PASSWORD;
+  if (!password) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        'ADMIN_PASSWORD must be set in production to seed the admin user (refusing to create a default-credential admin).'
+      );
+    }
+    password = 'admin123'; // dev-only convenience; not used in production
+    console.warn(
+      `[seed] ADMIN_PASSWORD not set — using an insecure dev default for ${email}. Set ADMIN_PASSWORD to override.`
+    );
+  }
+  await User.create({
+    email,
+    passwordHash: await bcrypt.hash(password, 10),
+    role: 'admin'
+  });
+  console.log(`[seed] created admin user: ${email}`);
+}
+
+async function seedDemoData() {
+  // Pilot project
+  if ((await Project.countDocuments()) === 0) {
     await Project.create({
       name: 'Spinach Pilot',
       description: 'Pilot spinach cultivation program with smallholder farmers.',
@@ -37,7 +77,7 @@ export async function seedIfNeeded() {
     console.log('[seed] created Spinach Pilot project');
   }
 
-  // 3. Demo investor (with funded wallet)
+  // Demo investor (with funded wallet)
   let demoInvestor = await Investor.findOne({ email: 'demo@example.com' });
   if (!demoInvestor) {
     const w = await createFundedWallet();
@@ -59,38 +99,23 @@ export async function seedIfNeeded() {
     if (wallet) await reconcileWallet(wallet, 'demo investor');
   }
 
-  // 4. Demo farmer
-  const farmerCount = await Farmer.countDocuments();
-  if (farmerCount === 0) {
-    await Farmer.create({
-      name: 'Demo Farmer',
-      walletId: '',
-      assignedProjects: []
-    });
+  // Demo farmer
+  if ((await Farmer.countDocuments()) === 0) {
+    await Farmer.create({ name: 'Demo Farmer', walletId: '', assignedProjects: [] });
     console.log('[seed] created demo farmer');
   }
 
-  // 5. Demo users (admin + investor account linked to demoInvestor)
-  const adminEmail = 'admin@agri.io';
-  const investorEmail = 'investor@agri.io';
-  const existingAdmin = await User.findOne({ email: adminEmail });
-  if (!existingAdmin) {
-    await User.create({
-      email: adminEmail,
-      passwordHash: await bcrypt.hash('admin123', 10),
-      role: 'admin'
-    });
-    console.log(`[seed] created admin user: ${adminEmail} / admin123`);
-  }
-  const existingInvestorUser = await User.findOne({ email: investorEmail });
-  if (!existingInvestorUser) {
+  // Demo investor login, linked to the demo investor
+  const investorEmail = (process.env.DEMO_INVESTOR_EMAIL || 'investor@agri.io').toLowerCase().trim();
+  if (!(await User.findOne({ email: investorEmail }))) {
+    const password = process.env.DEMO_INVESTOR_PASSWORD || 'investor123';
     await User.create({
       email: investorEmail,
-      passwordHash: await bcrypt.hash('investor123', 10),
+      passwordHash: await bcrypt.hash(password, 10),
       role: 'investor',
       investorId: demoInvestor._id
     });
-    console.log(`[seed] created investor user: ${investorEmail} / investor123`);
+    console.log(`[seed] created demo investor user: ${investorEmail}`);
   }
 }
 

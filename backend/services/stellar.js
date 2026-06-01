@@ -13,12 +13,68 @@ import {
 // STELLAR_HORIZON_URL if you ever need to swap the Horizon endpoint
 // (still testnet — there is no mainnet support in this app).
 const HORIZON_URL = process.env.STELLAR_HORIZON_URL || 'https://horizon-testnet.stellar.org';
+
+// The network passphrase is hard-pinned to TESTNET. Every transaction is
+// signed against it, so even a mis-pointed Horizon URL cannot move real funds.
 const NETWORK_PASSPHRASE = Networks.TESTNET;
+
+// Hard guard: refuse to run against a known Stellar mainnet ("pubnet") Horizon.
+// This is belt-and-suspenders on top of the testnet passphrase above — it makes
+// a mainnet misconfiguration fail loudly at boot instead of silently.
+assertTestnetHorizon(HORIZON_URL);
+
+// Friendbot is a TESTNET-ONLY faucet (it does not exist on mainnet). It is
+// gated so it can be disabled in environments that pre-fund accounts another
+// way, and time-boxed so a slow/flaky faucet can't hang an API request.
+const FRIENDBOT_ENABLED = process.env.STELLAR_FRIENDBOT_ENABLED !== 'false';
+const FRIENDBOT_TIMEOUT_MS = Number(process.env.STELLAR_FRIENDBOT_TIMEOUT_MS) || 30_000;
+
 // 1000 stroops = 0.0001 XLM. Higher than BASE_FEE (100) for better acceptance
 // when Horizon is busy. Still negligible on testnet.
 const FEE = String(Math.max(Number(BASE_FEE) * 10, 1000));
 
 const server = new Horizon.Server(HORIZON_URL);
+
+// Throw at module load if STELLAR_HORIZON_URL points at Stellar mainnet.
+function assertTestnetHorizon(url) {
+  let host;
+  try {
+    host = new URL(url).host.toLowerCase();
+  } catch {
+    throw new Error(`STELLAR_HORIZON_URL is not a valid URL: ${url}`);
+  }
+  // Known public mainnet Horizon hosts. `horizon-testnet.stellar.org` is fine;
+  // bare `horizon.stellar.org` (and anything labelled pubnet) is rejected.
+  if (host === 'horizon.stellar.org' || host.includes('pubnet')) {
+    throw new Error(
+      `Refusing to start: STELLAR_HORIZON_URL points at Stellar mainnet (${host}). ` +
+        'This app is testnet-only.'
+    );
+  }
+}
+
+// Call Friendbot to fund a public key, gated by STELLAR_FRIENDBOT_ENABLED and
+// bounded by a timeout so a flaky faucet surfaces a clear error fast.
+async function friendbotFund(publicKey) {
+  if (!FRIENDBOT_ENABLED) {
+    throw new Error(
+      'Friendbot funding is disabled (STELLAR_FRIENDBOT_ENABLED=false). ' +
+        'Fund this testnet account manually before it can transact.'
+    );
+  }
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`Friendbot timed out after ${FRIENDBOT_TIMEOUT_MS}ms`)),
+      FRIENDBOT_TIMEOUT_MS
+    );
+  });
+  try {
+    await Promise.race([server.friendbot(publicKey).call(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export const ASSET = 'XLM';
 export const NETWORK = 'stellar-testnet';
@@ -33,7 +89,7 @@ export function createWallet() {
 // Returns the keypair plus the live XLM balance after funding (~10000 XLM).
 export async function createFundedWallet() {
   const kp = Keypair.random();
-  await server.friendbot(kp.publicKey()).call();
+  await friendbotFund(kp.publicKey());
   const balance = await getLiveBalance(kp.publicKey());
   return {
     publicKey: kp.publicKey(),
@@ -50,7 +106,7 @@ export async function fundIfMissing(publicKey) {
     return { funded: false, alreadyOnNetwork: true };
   } catch (e) {
     if (!(e instanceof NotFoundError)) throw e;
-    await server.friendbot(publicKey).call();
+    await friendbotFund(publicKey);
     return { funded: true, alreadyOnNetwork: false };
   }
 }

@@ -4,8 +4,13 @@ import Investor from '../models/Investor.js';
 import Project from '../models/Project.js';
 import Revenue from '../models/Revenue.js';
 import Transaction from '../models/Transaction.js';
+import Wallet from '../models/Wallet.js';
+import { transferXLM, ASSET, NETWORK } from '../services/stellar.js';
+import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { idempotent } from '../middleware/idempotency.js';
+import { round, sum, add, sub, pct } from '../services/money.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
@@ -25,13 +30,13 @@ async function investorShares() {
   for (const row of txAgg) {
     const investorId = investorByWallet.get(row._id);
     if (!investorId) continue;
-    totals[investorId] = (totals[investorId] || 0) + row.total;
+    totals[investorId] = add(totals[investorId] || 0, row.total);
   }
-  const grandTotal = Object.values(totals).reduce((s, v) => s + v, 0);
+  const grandTotal = sum(Object.values(totals));
   return Object.entries(totals).map(([investorId, invested]) => ({
     investorId,
-    invested: +invested.toFixed(2),
-    sharePercent: grandTotal > 0 ? +(invested / grandTotal * 100).toFixed(4) : 0
+    invested: round(invested),
+    sharePercent: grandTotal > 0 ? round((invested / grandTotal) * 100, 4) : 0
   }));
 }
 
@@ -88,22 +93,22 @@ r.get('/preview/:projectId', requireRole('admin'), asyncH(async (req, res) => {
   ]);
   const revenue = revAgg[0]?.total || 0;
   const payouts = project.spent;
-  const grossProfit = revenue - payouts;
-  const platformFee = grossProfit > 0 ? +(grossProfit * platformFeePercent / 100).toFixed(2) : 0;
-  const netProfit = +(grossProfit - platformFee).toFixed(2);
+  const grossProfit = sub(revenue, payouts);
+  const platformFee = grossProfit > 0 ? pct(grossProfit, platformFeePercent) : 0;
+  const netProfit = sub(grossProfit, platformFee);
 
   const shares = await investorShares();
   const breakdown = shares.map(s => ({
     ...s,
-    estimatedReturn: netProfit > 0 ? +(netProfit * s.sharePercent / 100).toFixed(2) : 0
+    estimatedReturn: netProfit > 0 ? pct(netProfit, s.sharePercent) : 0
   }));
 
   res.json({
     projectId: project._id,
     projectName: project.name,
-    revenue: +revenue.toFixed(2),
-    payouts: +payouts.toFixed(2),
-    grossProfit: +grossProfit.toFixed(2),
+    revenue: round(revenue),
+    payouts: round(payouts),
+    grossProfit: round(grossProfit),
     platformFeePercent,
     platformFee,
     netProfit,
@@ -112,7 +117,7 @@ r.get('/preview/:projectId', requireRole('admin'), asyncH(async (req, res) => {
 }));
 
 // Generate (persist) distribution records for a project.
-r.post('/generate', requireRole('admin'), asyncH(async (req, res) => {
+r.post('/generate', requireRole('admin'), idempotent('POST /api/distributions/generate'), asyncH(async (req, res) => {
   const { projectId, platformFeePercent } = req.body || {};
   const project = await Project.findById(projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });
@@ -124,12 +129,12 @@ r.post('/generate', requireRole('admin'), asyncH(async (req, res) => {
   ]);
   const revenue = revAgg[0]?.total || 0;
   const payouts = project.spent;
-  const grossProfit = revenue - payouts;
+  const grossProfit = sub(revenue, payouts);
   if (grossProfit <= 0) {
     return res.status(400).json({ error: 'No profit available to distribute (revenue ≤ payouts).' });
   }
-  const platformFee = +(grossProfit * feePct / 100).toFixed(2);
-  const netProfit = +(grossProfit - platformFee).toFixed(2);
+  const platformFee = pct(grossProfit, feePct);
+  const netProfit = sub(grossProfit, platformFee);
 
   const shares = await investorShares();
   if (shares.length === 0) {
@@ -142,10 +147,10 @@ r.post('/generate', requireRole('admin'), asyncH(async (req, res) => {
     .map(s => ({
       investorId: s.investorId,
       projectId: project._id,
-      amount: +(netProfit * s.sharePercent / 100).toFixed(2),
+      amount: pct(netProfit, s.sharePercent),
       sharePercent: s.sharePercent,
       platformFeePercent: feePct,
-      grossProfit: +grossProfit.toFixed(2),
+      grossProfit: round(grossProfit),
       netProfit,
       status: 'pending',
       timestamp: now
@@ -154,7 +159,7 @@ r.post('/generate', requireRole('admin'), asyncH(async (req, res) => {
 
   const enriched = await Promise.all(created.map(enrichDistribution));
 
-  created.forEach((dist, idx) => {
+  created.forEach((dist) => {
     logActivity({
       userId: req.user?.id,
       userRole: req.user?.role || 'system',
@@ -169,7 +174,7 @@ r.post('/generate', requireRole('admin'), asyncH(async (req, res) => {
         investorId: dist.investorId.toString(),
         amount: dist.amount,
         sharePercent: dist.sharePercent,
-        grossProfit: +grossProfit.toFixed(2),
+        grossProfit: round(grossProfit),
         netProfit,
         platformFee
       }
@@ -179,26 +184,79 @@ r.post('/generate', requireRole('admin'), asyncH(async (req, res) => {
   res.status(201).json({
     projectId: project._id,
     projectName: project.name,
-    grossProfit: +grossProfit.toFixed(2),
+    grossProfit: round(grossProfit),
     platformFee,
     netProfit,
     distributions: enriched
   });
 }));
 
-// Mark a distribution as paid (mock — no real transfer).
-r.post('/:id/mark-paid', requireRole('admin'), asyncH(async (req, res) => {
-  const dist = await Distribution.findByIdAndUpdate(
-    req.params.id,
-    { status: 'paid', paidAt: new Date() },
-    { new: true }
-  );
+// Pay a distribution: real Stellar testnet transfer treasury → investor wallet.
+// Idempotent (Idempotency-Key) and guarded by the persisted `paid` status so a
+// retry can never double-pay an investor.
+r.post('/:id/mark-paid', requireRole('admin'), idempotent('POST /api/distributions/:id/mark-paid'), asyncH(async (req, res) => {
+  const dist = await Distribution.findById(req.params.id);
   if (!dist) return res.status(404).json({ error: 'distribution not found' });
+
+  // Already settled — return current state without transferring again.
+  if (dist.status === 'paid') {
+    return res.json(await enrichDistribution(dist));
+  }
 
   const [inv, proj] = await Promise.all([
     Investor.findById(dist.investorId).lean(),
     Project.findById(dist.projectId).lean()
   ]);
+  if (!inv) return res.status(404).json({ error: 'investor not found' });
+
+  const investorWallet = await Wallet.findById(inv.walletId);
+  const treasury = await getTreasury();
+  if (!investorWallet || !treasury) {
+    return res.status(500).json({ error: 'wallets not initialised' });
+  }
+
+  let result;
+  try {
+    result = await transferXLM({
+      fromSecret: treasury.decryptSecret(),
+      toPublicKey: investorWallet.publicKey,
+      amount: dist.amount
+    });
+  } catch (e) {
+    logActivity({
+      userId: req.user?.id,
+      userRole: req.user?.role || 'system',
+      actionType: ActivityTypes.DISTRIBUTION_PAID,
+      entityType: EntityTypes.DISTRIBUTION,
+      entityId: dist._id.toString(),
+      description: `Distribution payout of ${dist.amount} XLM to "${inv.name}" failed - ${e.message}`,
+      status: ActivityStatus.FAILED,
+      metadata: { investorId: inv._id.toString(), amount: dist.amount, error: e.message }
+    });
+    return res.status(400).json({ error: e.message });
+  }
+
+  dist.status = 'paid';
+  dist.paidAt = new Date();
+  dist.txHash = result.txHash;
+  dist.network = result.network;
+  await dist.save();
+
+  // Record the payout in the ledger so treasury analytics stays consistent.
+  await Transaction.create({
+    stage: 'payout',
+    amount: dist.amount,
+    asset: ASSET,
+    senderId: treasury._id,
+    senderLabel: treasury.label,
+    receiverId: investorWallet._id,
+    receiverLabel: investorWallet.label,
+    projectId: dist.projectId,
+    txHash: result.txHash,
+    ledger: result.ledger,
+    status: 'success',
+    network: result.network
+  });
 
   logActivity({
     userId: req.user?.id,
@@ -206,16 +264,18 @@ r.post('/:id/mark-paid', requireRole('admin'), asyncH(async (req, res) => {
     actionType: ActivityTypes.DISTRIBUTION_PAID,
     entityType: EntityTypes.DISTRIBUTION,
     entityId: dist._id.toString(),
-    description: `Distribution of ${dist.amount} XLM marked as paid to investor "${inv?.name || 'Unknown'}" for project "${proj?.name || 'Unknown'}"`,
+    description: `Distribution of ${dist.amount} XLM paid to investor "${inv.name}" for project "${proj?.name || 'Unknown'}"`,
+    txHash: result.txHash,
     status: ActivityStatus.SUCCESS,
     metadata: {
       projectId: proj?._id.toString(),
       projectName: proj?.name,
-      investorId: inv?._id.toString(),
-      investorName: inv?.name,
+      investorId: inv._id.toString(),
+      investorName: inv.name,
       amount: dist.amount,
       sharePercent: dist.sharePercent,
-      paidAt: dist.paidAt
+      paidAt: dist.paidAt,
+      txHash: result.txHash
     }
   });
 

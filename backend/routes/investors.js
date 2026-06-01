@@ -8,6 +8,8 @@ import { createFundedWallet, transferXLM, getLiveBalance, ASSET, NETWORK } from 
 import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
 import { requireRole, requireSelfOrAdmin } from '../middleware/auth.js';
+import { idempotent } from '../middleware/idempotency.js';
+import { round, sum } from '../services/money.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
@@ -72,42 +74,43 @@ r.get('/:id/summary', requireSelfOrAdmin(req => req.params.id), asyncH(async (re
     stage: 'investment',
     senderId: investor.walletId
   }).sort({ timestamp: -1 });
-  const totalInvested = investmentTxs.reduce((s, t) => s + t.amount, 0);
+  const totalInvested = sum(investmentTxs, t => t.amount);
 
   const dists = await Distribution.find({ investorId: investor._id }).sort({ timestamp: -1 });
-  const totalReturns = dists.reduce((s, d) => s + d.amount, 0);
-  const paidReturns = dists.filter(d => d.status === 'paid').reduce((s, d) => s + d.amount, 0);
-  const pendingReturns = dists.filter(d => d.status !== 'paid').reduce((s, d) => s + d.amount, 0);
+  const totalReturns = sum(dists, d => d.amount);
+  const paidReturns = sum(dists.filter(d => d.status === 'paid'), d => d.amount);
+  const pendingReturns = sum(dists.filter(d => d.status !== 'paid'), d => d.amount);
 
   const projectIds = Array.from(new Set(dists.map(d => d.projectId)));
   const projectDocs = await Project.find({ _id: { $in: projectIds } });
   const projects = projectIds.map(pid => {
     const p = projectDocs.find(x => x._id === pid);
     if (!p) return null;
-    const investorShareInProject = dists
-      .filter(d => d.projectId === pid)
-      .reduce((s, d) => s + d.amount, 0);
+    const investorShareInProject = sum(
+      dists.filter(d => d.projectId === pid),
+      d => d.amount
+    );
     return {
       id: p._id,
       name: p.name,
       cropType: p.cropType || '',
       status: p.status || 'active',
-      estimatedReturn: +investorShareInProject.toFixed(2)
+      estimatedReturn: round(investorShareInProject)
     };
   }).filter(Boolean);
 
-  const currentEstimatedValue = +(
+  const currentEstimatedValue = round(
     (wallet?.balance || 0) + totalInvested + totalReturns
-  ).toFixed(2);
+  );
 
   res.json({
     investor: { id: investor._id, name: investor.name, email: investor.email },
     wallet: wallet ? { id: wallet._id, publicKey: wallet.publicKey, balance: wallet.balance } : null,
     totals: {
-      invested: +totalInvested.toFixed(2),
-      returns: +totalReturns.toFixed(2),
-      paidReturns: +paidReturns.toFixed(2),
-      pendingReturns: +pendingReturns.toFixed(2),
+      invested: round(totalInvested),
+      returns: round(totalReturns),
+      paidReturns: round(paidReturns),
+      pendingReturns: round(pendingReturns),
       currentEstimatedValue,
       projectsCount: projects.length,
       transactionsCount: investmentTxs.length
@@ -123,7 +126,7 @@ r.get('/:id/summary', requireSelfOrAdmin(req => req.params.id), asyncH(async (re
 
 // Top up an investor wallet by sending real XLM from the treasury on testnet.
 // Records a Transaction with the real ledger hash + status.
-r.post('/:id/fund', requireRole('admin'), asyncH(async (req, res) => {
+r.post('/:id/fund', requireRole('admin'), idempotent('POST /api/investors/:id/fund'), asyncH(async (req, res) => {
   const investor = await Investor.findById(req.params.id);
   if (!investor) return res.status(404).json({ error: 'investor not found' });
   const amount = Number(req.body?.amount);
@@ -135,29 +138,33 @@ r.post('/:id/fund', requireRole('admin'), asyncH(async (req, res) => {
     return res.status(500).json({ error: 'wallets not initialised' });
   }
 
+  // Pending ledger row recorded before any funds move, so a mid-flight crash
+  // is auditable instead of an untracked treasury → investor transfer.
+  const tx = await Transaction.create({
+    stage: 'investment', // closest existing bucket; treasury → investor top-up
+    amount,
+    asset: ASSET,
+    senderId: treasury._id,
+    senderLabel: treasury.label,
+    receiverId: investorWallet._id,
+    receiverLabel: investorWallet.label,
+    projectId: null,
+    txHash: '',
+    status: 'pending',
+    network: NETWORK
+  });
+
   let result;
   try {
     result = await transferXLM({
-      fromSecret: treasury.secret,
+      fromSecret: treasury.decryptSecret(),
       toPublicKey: investorWallet.publicKey,
       amount
     });
   } catch (e) {
-    // Persist a failed funding tx so admins can see it in the ledger.
-    await Transaction.create({
-      stage: 'investment', // closest existing bucket; treasury → investor top-up
-      amount,
-      asset: ASSET,
-      senderId: treasury._id,
-      senderLabel: treasury.label,
-      receiverId: investorWallet._id,
-      receiverLabel: investorWallet.label,
-      projectId: null,
-      txHash: '',
-      status: 'failed',
-      network: NETWORK,
-      errorCode: e.code || ''
-    });
+    tx.status = 'failed';
+    tx.errorCode = e.code || '';
+    await tx.save();
 
     // Log failed funding attempt
     logActivity({
@@ -176,6 +183,13 @@ r.post('/:id/fund', requireRole('admin'), asyncH(async (req, res) => {
 
     return res.status(400).json({ error: e.message });
   }
+
+  // Settle the pending row with the real ledger result.
+  tx.status = result.status;
+  tx.txHash = result.txHash;
+  tx.ledger = result.ledger;
+  tx.network = result.network;
+  await tx.save();
 
   // Refresh both balances from Horizon (single source of truth).
   const [treasuryLive, investorLive] = await Promise.all([

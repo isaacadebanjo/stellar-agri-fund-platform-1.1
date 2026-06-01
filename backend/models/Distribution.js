@@ -13,6 +13,9 @@ const DistributionSchema = new mongoose.Schema({
   grossProfit: { type: Number, default: 0 },
   netProfit: { type: Number, default: 0 },
   status: { type: String, enum: DISTRIBUTION_STATUSES, default: 'pending', index: true },
+  // Real Stellar payout details, set when the distribution is paid.
+  txHash: { type: String, default: '' },
+  network: { type: String, default: '' },
   timestamp: { type: Date, default: () => new Date() },
   paidAt: { type: Date, default: null }
 }, baseSchemaOptions(10, ret => {

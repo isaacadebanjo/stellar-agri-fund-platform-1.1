@@ -16,11 +16,19 @@ export const tokenStore = {
 let onUnauthorized = null;
 export function setOnUnauthorized(fn) { onUnauthorized = fn; }
 
-async function request(method, url, body) {
+// Unique key for an idempotent money mutation — lets the server dedupe a
+// retried/double-submitted request instead of moving funds twice.
+function newIdempotencyKey() {
+  return (crypto.randomUUID?.() ||
+    `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+}
+
+async function request(method, url, body, { idempotencyKey } = {}) {
   const headers = {};
   if (body) headers['Content-Type'] = 'application/json';
   const token = tokenStore.get();
   if (token) headers.Authorization = `Bearer ${token}`;
+  if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey;
 
   const res = await fetch(API_BASE + url, {
     method,
@@ -45,13 +53,15 @@ export const api = {
   auth: {
     login: (email, password) => request('POST', '/api/auth/login', { email, password }),
     me: () => request('GET', '/api/auth/me'),
+    refresh: () => request('POST', '/api/auth/refresh'),
     logout: () => request('POST', '/api/auth/logout')
   },
   dashboard: () => request('GET', '/api/dashboard'),
   investors: {
     list: () => request('GET', '/api/investors'),
     create: (data) => request('POST', '/api/investors', data),
-    fund: (id, amount) => request('POST', `/api/investors/${id}/fund`, { amount }),
+    fund: (id, amount) =>
+      request('POST', `/api/investors/${id}/fund`, { amount }, { idempotencyKey: newIdempotencyKey() }),
     summary: (id) => request('GET', `/api/investors/${id}/summary`)
   },
   projects: {
@@ -61,8 +71,10 @@ export const api = {
   },
   transactions: {
     list: () => request('GET', '/api/transactions'),
-    invest: (investorId, amount) => request('POST', '/api/transactions/invest', { investorId, amount }),
-    allocate: (projectId, amount) => request('POST', '/api/transactions/allocate', { projectId, amount })
+    invest: (investorId, amount) =>
+      request('POST', '/api/transactions/invest', { investorId, amount }, { idempotencyKey: newIdempotencyKey() }),
+    allocate: (projectId, amount) =>
+      request('POST', '/api/transactions/allocate', { projectId, amount }, { idempotencyKey: newIdempotencyKey() })
   },
   payouts: {
     list: () => request('GET', '/api/payouts'),
@@ -84,8 +96,9 @@ export const api = {
     preview: (projectId, platformFeePercent = 10) =>
       request('GET', `/api/distributions/preview/${projectId}?platformFeePercent=${platformFeePercent}`),
     generate: (projectId, platformFeePercent = 10) =>
-      request('POST', '/api/distributions/generate', { projectId, platformFeePercent }),
-    markPaid: (id) => request('POST', `/api/distributions/${id}/mark-paid`)
+      request('POST', '/api/distributions/generate', { projectId, platformFeePercent }, { idempotencyKey: newIdempotencyKey() }),
+    markPaid: (id) =>
+      request('POST', `/api/distributions/${id}/mark-paid`, undefined, { idempotencyKey: newIdempotencyKey() })
   },
   reports: {
     investors: () => request('GET', '/api/reports/investors'),
@@ -99,6 +112,10 @@ export const api = {
     },
     get: (id) => request('GET', `/api/activity/${id}`),
     summary: (limit = 20) => request('GET', `/api/activity/summary/recent?limit=${limit}`)
+  },
+  events: {
+    // Short-lived ticket the SSE EventSource uses instead of the session token.
+    ticket: () => request('GET', '/api/events/ticket')
   },
   treasury: {
     overview: () => request('GET', '/api/treasury/overview'),

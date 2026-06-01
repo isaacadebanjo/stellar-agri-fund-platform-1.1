@@ -1,29 +1,35 @@
 import express from 'express';
-import jwt from 'jsonwebtoken';
+import { requireAuth, signStreamTicket, verifyStreamTicket } from '../middleware/auth.js';
+import { asyncH } from './_async.js';
 import { subscribe } from '../services/eventBus.js';
 
 const router = express.Router();
 
 /**
- * GET /api/events
+ * GET /api/events/ticket  (authenticated)
  *
- * Server-Sent Events stream. The browser's native EventSource cannot set
- * Authorization headers, so the JWT is passed via query string. Acceptable
- * trade-off: in production this is HTTPS, the token is short-lived (7d), and
- * we never accept the same token for write paths through this endpoint.
+ * Issues a 60-second, single-purpose ticket. The browser puts THIS in the
+ * EventSource URL — never the long-lived session token — so a token in a
+ * proxy/access log is at worst a 1-minute, stream-only credential.
  */
-router.get('/', (req, res) => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) return res.status(500).json({ error: 'JWT_SECRET not set' });
+router.get('/ticket', requireAuth, (req, res) => {
+  res.json({ ticket: signStreamTicket(req.user) });
+});
 
-  const token = req.query.token;
-  if (!token) return res.status(401).json({ error: 'Authentication required' });
+/**
+ * GET /api/events?ticket=<jwt>
+ *
+ * Server-Sent Events stream, authenticated by the short-lived ticket above.
+ */
+router.get('/', asyncH(async (req, res) => {
+  const ticket = req.query.ticket;
+  if (!ticket) return res.status(401).json({ error: 'Authentication required' });
 
   let user;
   try {
-    user = jwt.verify(token, secret);
+    user = await verifyStreamTicket(ticket);
   } catch {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return res.status(401).json({ error: 'Invalid or expired stream ticket' });
   }
 
   // SSE headers.
@@ -63,6 +69,6 @@ router.get('/', (req, res) => {
     unsubscribe();
     res.end();
   });
-});
+}));
 
 export default router;

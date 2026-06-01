@@ -1,15 +1,16 @@
 import { useEffect, useRef } from 'react';
-import { tokenStore } from './api.js';
+import { api } from './api.js';
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 /**
  * Subscribe to the /api/events SSE stream while the component is mounted.
  *
- * The token is passed as a query param because the browser's native
- * EventSource cannot set Authorization headers. The stream auto-reconnects
- * via the browser; we re-initialize it if the token changes (e.g. after
- * sign-in) or the component unmounts.
+ * EventSource can't send Authorization headers, so the connection is
+ * authenticated with a short-lived (60s) single-purpose ticket fetched from
+ * /api/events/ticket. Because EventSource auto-reconnect would reuse a stale
+ * (expired) ticket, we manage reconnection ourselves and fetch a fresh ticket
+ * for every (re)connection.
  *
  * @param {(event: object) => void} onEvent - called for every SSE message
  * @param {boolean} [enabled=true] - skip subscribing when false
@@ -21,36 +22,59 @@ export function useEventStream(onEvent, enabled = true) {
 
   useEffect(() => {
     if (!enabled) return;
-    const token = tokenStore.get();
-    if (!token) return;
 
-    const url = `${API_BASE}/api/events?token=${encodeURIComponent(token)}`;
-    const es = new EventSource(url);
+    let es = null;
+    let cancelled = false;
+    let retryTimer = null;
 
     function handle(e) {
       try {
         const data = JSON.parse(e.data);
         onEventRef.current?.(data);
       } catch {
-        // Ignore non-JSON frames (e.g. heartbeats arrive as comments and
-        // don't fire 'message', but be defensive).
+        // Ignore non-JSON frames (heartbeats arrive as comments).
       }
     }
 
-    es.addEventListener('message', handle);
-    es.addEventListener('hello', handle);
-    es.addEventListener('activity', handle);
+    function scheduleReconnect(delay) {
+      if (cancelled) return;
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(connect, delay);
+    }
 
-    es.onerror = () => {
-      // The browser will auto-reconnect with backoff. Nothing to do here
-      // beyond letting it happen — we rely on EventSource's built-in retry.
-    };
+    async function connect() {
+      if (cancelled) return;
+      let ticket;
+      try {
+        ({ ticket } = await api.events.ticket());
+      } catch {
+        // Not authenticated yet / transient failure — back off and retry.
+        return scheduleReconnect(5000);
+      }
+      if (cancelled || !ticket) return;
+
+      es = new EventSource(`${API_BASE}/api/events?ticket=${encodeURIComponent(ticket)}`);
+      es.addEventListener('message', handle);
+      es.addEventListener('hello', handle);
+      es.addEventListener('activity', handle);
+      es.onerror = () => {
+        // Likely an expired ticket — rebuild with a fresh one.
+        es?.close();
+        scheduleReconnect(3000);
+      };
+    }
+
+    connect();
 
     return () => {
-      es.removeEventListener('message', handle);
-      es.removeEventListener('hello', handle);
-      es.removeEventListener('activity', handle);
-      es.close();
+      cancelled = true;
+      clearTimeout(retryTimer);
+      if (es) {
+        es.removeEventListener('message', handle);
+        es.removeEventListener('hello', handle);
+        es.removeEventListener('activity', handle);
+        es.close();
+      }
     };
   }, [enabled]);
 }

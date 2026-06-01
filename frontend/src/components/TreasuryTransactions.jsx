@@ -131,7 +131,7 @@ export default function TreasuryTransactions({ loading }) {
               </thead>
               <tbody>
                 {transactions.map((tx) => (
-                  <tr key={tx._id}>
+                  <tr key={tx.id}>
                     <td>
                       <span className={`font-medium ${getTypeColor(tx.type)}`}>
                         {tx.type}

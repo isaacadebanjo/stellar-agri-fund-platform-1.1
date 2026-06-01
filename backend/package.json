@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "migrate:encrypt-wallets": "node scripts/encrypt-wallets.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "format": "prettier --write ."
   },
   "engines": {
     "node": ">=20"
@@ -15,10 +20,22 @@
     "cors": "^2.8.5",
     "dotenv": "^17.4.2",
     "express": "^4.19.2",
+    "express-rate-limit": "^7.5.1",
+    "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.1",
+    "morgan": "^1.10.1",
     "nanoid": "^5.0.7",
     "pdfkit": "^0.18.0",
     "stellar-sdk": "^12.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^9.1.2",
+    "mongodb-memory-server": "^10.4.3",
+    "prettier": "^3.8.3",
+    "supertest": "^7.2.2",
+    "vitest": "^2.1.9"
   }
 }
