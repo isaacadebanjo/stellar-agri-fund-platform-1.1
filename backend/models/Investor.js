@@ -11,9 +11,16 @@ const InvestorSchema = new mongoose.Schema({
   // seed, so walletId is absent and stellarPublicKey holds their G... address.
   custodial: { type: Boolean, default: true },
   walletId: { type: String, default: null, index: true },
-  // Self-custodied Stellar public key (G...). Sparse-unique so two investors
-  // can't claim the same wallet, while custodial rows (null) are unaffected.
-  stellarPublicKey: { type: String, default: null, index: { unique: true, sparse: true } }
+  // Self-custodied Stellar public key (G...). Unique ONLY among real wallet keys
+  // (partial index on string values) so two non-custodial investors can't claim
+  // the same wallet — while any number of custodial rows (null) coexist. (A plain
+  // sparse+unique index would NOT work here: `default: null` makes the field
+  // present, so sparse wouldn't exclude it and two nulls would collide.)
+  stellarPublicKey: {
+    type: String,
+    default: null,
+    index: { unique: true, partialFilterExpression: { stellarPublicKey: { $type: 'string' } } }
+  }
 }, baseSchemaOptions());
 
 export default mongoose.model('Investor', InvestorSchema);
