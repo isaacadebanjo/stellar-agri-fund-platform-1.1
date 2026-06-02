@@ -8,6 +8,7 @@
     "dev": "node --watch server.js",
     "migrate:encrypt-wallets": "node scripts/encrypt-wallets.js",
     "reset-admin-password": "node scripts/reset-admin-password.js",
+    "reset:ledger": "node scripts/reset-ledger.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint .",

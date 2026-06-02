@@ -8,7 +8,6 @@ export default function Farmers({ refreshKey, onChange }) {
   const [farmers, setFarmers] = useState([]);
   const [projects, setProjects] = useState([]);
   const [name, setName] = useState('');
-  const [walletId, setWalletId] = useState('');
   const [assignedProjects, setAssignedProjects] = useState([]);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -29,8 +28,8 @@ export default function Farmers({ refreshKey, onChange }) {
     if (!name.trim()) return;
     setBusy(true);
     try {
-      await api.farmers.create({ name: name.trim(), walletId: walletId.trim(), assignedProjects });
-      setName(''); setWalletId(''); setAssignedProjects([]); setErr('');
+      await api.farmers.create({ name: name.trim(), assignedProjects });
+      setName(''); setAssignedProjects([]); setErr('');
       await load(); onChange?.();
     } catch (e) { setErr(e.message); }
     setBusy(false);
@@ -38,14 +37,11 @@ export default function Farmers({ refreshKey, onChange }) {
 
   return (
     <>
-      <Section title="Add Farmer" subtitle="Register a payout recipient and (optionally) link projects">
+      <Section title="Add Farmer" subtitle="Registers a payout recipient + auto-creates a funded Stellar testnet wallet to receive on-chain payouts">
         <form onSubmit={add} className="space-y-3">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <Field label="Farmer name">
               <Input placeholder="Full name" value={name} onChange={e => setName(e.target.value)} required />
-            </Field>
-            <Field label="Wallet (optional)">
-              <Input placeholder="e.g. Stellar pubkey" value={walletId} onChange={e => setWalletId(e.target.value)} />
             </Field>
           </div>
           <Field label="Assign projects">
@@ -76,7 +72,7 @@ export default function Farmers({ refreshKey, onChange }) {
             )}
           </Field>
           <div className="flex items-center justify-end">
-            <Button disabled={busy}>Create farmer</Button>
+            <Button disabled={busy}>{busy ? 'Creating wallet on testnet…' : 'Create farmer'}</Button>
           </div>
           <ErrorBanner>{err}</ErrorBanner>
         </form>
@@ -91,7 +87,8 @@ export default function Farmers({ refreshKey, onChange }) {
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Wallet</th>
+                  <th>Wallet (Stellar pubkey)</th>
+                  <th className="!text-right">Balance</th>
                   <th>Projects</th>
                   <th className="!text-right">Payouts</th>
                   <th className="!text-right">Total received</th>
@@ -101,7 +98,8 @@ export default function Farmers({ refreshKey, onChange }) {
                 {farmers.map(f => (
                   <tr key={f.id}>
                     <td className="font-medium text-slate-900">{f.name}</td>
-                    <td className="mono truncate max-w-[260px]">{f.walletId || '—'}</td>
+                    <td className="mono truncate max-w-[260px]">{f.publicKey || '—'}</td>
+                    <td className="text-right"><Money value={f.balance} /></td>
                     <td>
                       {f.projects.length === 0
                         ? <span className="text-slate-400">—</span>

@@ -4,12 +4,15 @@ import {
   Section, Button, Input, Select, Field, TableWrap, Empty, ErrorBanner, Money
 } from './ui.jsx';
 
+const explorerUrl = (hash) => `https://stellar.expert/explorer/testnet/tx/${hash}`;
+
 export default function Payouts({ refreshKey, onChange }) {
   const [payouts, setPayouts] = useState([]);
   const [projects, setProjects] = useState([]);
   const [farmers, setFarmers] = useState([]);
   const [form, setForm] = useState({ projectId: '', farmerId: '', amount: '', note: '' });
   const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const load = () => Promise.all([api.payouts.list(), api.projects.list(), api.farmers.list()])
     .then(([p, pr, f]) => {
@@ -26,6 +29,7 @@ export default function Payouts({ refreshKey, onChange }) {
   async function submit(e) {
     e.preventDefault();
     if (!form.farmerId) { setErr('Add a farmer in the Farmers tab first.'); return; }
+    setBusy(true);
     try {
       await api.payouts.create({
         projectId: form.projectId,
@@ -37,6 +41,7 @@ export default function Payouts({ refreshKey, onChange }) {
       setErr('');
       await load(); onChange?.();
     } catch (e) { setErr(e.message); }
+    setBusy(false);
   }
 
   return (
@@ -69,8 +74,11 @@ export default function Payouts({ refreshKey, onChange }) {
           <Field label="Note (optional)">
             <Input placeholder="e.g. Q1 harvest payment" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} />
           </Field>
-          <div className="flex justify-end">
-            <Button disabled={farmers.length === 0}>Record payout</Button>
+          <div className="flex items-center justify-end gap-3">
+            <span className="text-xs text-slate-500">Sends real XLM on Stellar testnet</span>
+            <Button disabled={farmers.length === 0 || busy}>
+              {busy ? 'Sending on testnet…' : 'Record payout'}
+            </Button>
           </div>
           <ErrorBanner>{err}</ErrorBanner>
         </form>
@@ -89,6 +97,7 @@ export default function Payouts({ refreshKey, onChange }) {
                   <th>Farmer</th>
                   <th>Wallet</th>
                   <th className="!text-right">Amount</th>
+                  <th>Tx</th>
                   <th>Note</th>
                 </tr>
               </thead>
@@ -100,6 +109,21 @@ export default function Payouts({ refreshKey, onChange }) {
                     <td className="font-medium text-slate-900">{p.farmerName}</td>
                     <td className="mono truncate max-w-[200px]">{p.farmerWallet || '—'}</td>
                     <td className="text-right"><Money value={p.amount} /></td>
+                    <td className="mono">
+                      {p.txHash ? (
+                        <a
+                          href={explorerUrl(p.txHash)}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-brand-700 hover:text-brand-800 underline-offset-2 hover:underline"
+                          title="View on Stellar Expert (testnet)"
+                        >
+                          {p.txHash.slice(0, 10)}…
+                        </a>
+                      ) : (
+                        <span className="text-slate-400">{p.status === 'failed' ? 'failed' : '—'}</span>
+                      )}
+                    </td>
                     <td className="text-slate-500">{p.note || '—'}</td>
                   </tr>
                 ))}

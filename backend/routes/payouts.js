@@ -1,9 +1,11 @@
 import { Router } from 'express';
-import mongoose from 'mongoose';
 import Payout from '../models/Payout.js';
 import Project from '../models/Project.js';
 import Farmer from '../models/Farmer.js';
 import Transaction from '../models/Transaction.js';
+import { transferXLM, getLiveBalance, ASSET, NETWORK } from '../services/stellar.js';
+import { getTreasury } from '../config/seed.js';
+import { ensureFarmerWallet } from '../services/farmerWallet.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
 import { idempotent } from '../middleware/idempotency.js';
@@ -29,11 +31,13 @@ r.get('/', asyncH(async (req, res) => {
   res.json(listResponse(payouts.map(p => p.toJSON()), total, pg));
 }));
 
-// Manual payout entry: project → farmer (must be linked to a registered farmer
-// + project). Idempotent (Idempotency-Key) so a double-submit can't create two
-// payout records / double-debit the project. All writes (project debit, payout,
-// ledger row, farmer link) run inside one Mongo transaction so a mid-way crash
-// can't leave the project debited without a matching payout, or vice versa.
+// Farmer payout: a REAL Stellar testnet transfer treasury → farmer wallet.
+//
+// Idempotent (Idempotency-Key) so a double-submit can't transfer twice. Flow
+// mirrors invest/fund: reserve the project's allocation, write a pending payout
+// + ledger row BEFORE funds move (so a mid-flight crash is auditable), submit
+// the on-chain payment, then settle — or compensate (refund the reservation,
+// mark failed) if the transfer is rejected.
 r.post('/', moneyLimiter, idempotent('POST /api/payouts'), asyncH(async (req, res) => {
   const projectId = id(req.body?.projectId, 'projectId');
   const farmerId = id(req.body?.farmerId, 'farmerId');
@@ -45,69 +49,98 @@ r.post('/', moneyLimiter, idempotent('POST /api/payouts'), asyncH(async (req, re
   const farmer = await Farmer.findById(farmerId);
   if (!farmer) return res.status(404).json({ error: 'farmer not found' });
 
+  const treasury = await getTreasury();
+  if (!treasury) return res.status(500).json({ error: 'treasury not initialised' });
+
+  // Make sure the farmer has an on-testnet wallet to receive the transfer.
+  const farmerWallet = await ensureFarmerWallet(farmer);
+
+  // Atomic, race-free reserve against the project's remaining allocation, so
+  // concurrent payouts can't overspend (no read → write TOCTOU).
+  const debited = await Project.findOneAndUpdate(
+    { _id: project._id, $expr: { $gte: [{ $subtract: ['$allocated', '$spent'] }, value] } },
+    { $inc: { spent: value } },
+    { returnDocument: 'after' }
+  );
+  if (!debited) return res.status(400).json({ error: 'Project has insufficient allocated funds' });
+
   const timestamp = new Date();
-  let payout;
-  const session = await mongoose.startSession();
+  const payout = await Payout.create({
+    projectId: project._id,
+    projectName: project.name,
+    farmerId: farmer._id,
+    farmerName: farmer.name,
+    farmerWallet: farmerWallet.publicKey,
+    amount: value,
+    asset: ASSET,
+    note,
+    status: 'pending',
+    network: NETWORK,
+    timestamp
+  });
+  const tx = await Transaction.create({
+    stage: 'payout',
+    amount: value,
+    asset: ASSET,
+    senderId: treasury._id,
+    senderLabel: treasury.label,
+    receiverId: farmer._id,
+    receiverLabel: `Farmer: ${farmer.name}`,
+    projectId: project._id,
+    txHash: '',
+    status: 'pending',
+    network: NETWORK,
+    timestamp
+  });
+
+  let result;
   try {
-    await session.withTransaction(async () => {
-      // Atomic, race-free debit: only succeeds while remaining (allocated -
-      // spent) still covers `value`, so concurrent payouts can't overspend a
-      // project's allocation (no read → write TOCTOU).
-      const debited = await Project.findOneAndUpdate(
-        { _id: project._id, $expr: { $gte: [{ $subtract: ['$allocated', '$spent'] }, value] } },
-        { $inc: { spent: value } },
-        { returnDocument: 'after', session }
-      );
-      if (!debited) {
-        const err = new Error('Project has insufficient allocated funds');
-        err.httpStatus = 400;
-        throw err;
-      }
-
-      const [createdPayout] = await Payout.create([{
-        projectId: project._id,
-        projectName: project.name,
-        farmerId: farmer._id,
-        farmerName: farmer.name,
-        farmerWallet: farmer.walletId || '',
-        amount: value,
-        asset: 'XLM',
-        note,
-        timestamp
-      }], { session });
-      payout = createdPayout;
-
-      // Mirror into the unified transactions ledger so the dashboard tells the
-      // full story. Farmers don't have on-chain wallets here, so this stays
-      // internal book-keeping (no Stellar submission).
-      await Transaction.create([{
-        stage: 'payout',
-        amount: value,
-        asset: 'XLM',
-        senderId: project._id,
-        senderLabel: `Project: ${project.name}`,
-        receiverId: farmer._id,
-        receiverLabel: `Farmer: ${farmer.name}`,
-        projectId: project._id,
-        txHash: 'internal_payout_' + Math.random().toString(36).slice(2, 12),
-        status: 'success',
-        network: 'internal',
-        timestamp
-      }], { session });
-
-      // Auto-link the project to the farmer's assigned list (idempotent).
-      await Farmer.updateOne(
-        { _id: farmer._id },
-        { $addToSet: { assignedProjects: project._id } },
-        { session }
-      );
+    result = await transferXLM({
+      fromSecret: treasury.decryptSecret(),
+      toPublicKey: farmerWallet.publicKey,
+      amount: value
     });
   } catch (e) {
-    if (e.httpStatus === 400) return res.status(400).json({ error: e.message });
-    throw e;
-  } finally {
-    await session.endSession();
+    // Compensate: refund the reserved allocation, mark records failed.
+    await Project.findByIdAndUpdate(project._id, { $inc: { spent: -value } });
+    payout.status = 'failed';
+    await payout.save();
+    tx.status = 'failed';
+    tx.errorCode = e.code || '';
+    await tx.save();
+
+    logActivity({
+      userId: req.user?.id,
+      userRole: req.user?.role || 'system',
+      actionType: ActivityTypes.PAYOUT,
+      entityType: EntityTypes.PAYOUT,
+      entityId: payout._id.toString(),
+      description: `Payout of ${value} XLM to farmer "${farmer.name}" failed - ${e.message}`,
+      status: ActivityStatus.FAILED,
+      metadata: { amount: value, farmerName: farmer.name, projectId: project._id.toString(), error: e.message }
+    });
+
+    return res.status(400).json({ error: e.message });
   }
+
+  // Settle the pending payout + ledger row with the real ledger result.
+  payout.status = 'success';
+  payout.txHash = result.txHash;
+  payout.ledger = result.ledger;
+  await payout.save();
+  tx.status = 'success';
+  tx.txHash = result.txHash;
+  tx.ledger = result.ledger;
+  await tx.save();
+
+  // Refresh the farmer wallet's balance from the network (best-effort).
+  try {
+    farmerWallet.balance = await getLiveBalance(farmerWallet.publicKey);
+    await farmerWallet.save();
+  } catch { /* live balance is non-critical here */ }
+
+  // Auto-link the project to the farmer's assigned list (idempotent).
+  await Farmer.updateOne({ _id: farmer._id }, { $addToSet: { assignedProjects: project._id } });
 
   logActivity({
     userId: req.user?.id,
@@ -116,12 +149,15 @@ r.post('/', moneyLimiter, idempotent('POST /api/payouts'), asyncH(async (req, re
     entityType: EntityTypes.PAYOUT,
     entityId: payout._id.toString(),
     description: `Payout of ${value} XLM to farmer "${farmer.name}" from project "${project.name}"`,
+    txHash: result.txHash,
     status: ActivityStatus.SUCCESS,
     metadata: {
       amount: value,
       farmerName: farmer.name,
+      farmerWallet: farmerWallet.publicKey,
       projectId: project._id.toString(),
-      projectName: project.name
+      projectName: project.name,
+      txHash: result.txHash
     }
   });
 

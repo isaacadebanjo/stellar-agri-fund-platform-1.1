@@ -16,7 +16,7 @@ const WalletSchema = new mongoose.Schema({
   // re-encrypted only if explicitly reassigned. encryptSecret() is idempotent,
   // so a double assignment can't double-wrap.
   secret: { type: String, required: true, set: encryptSecret },
-  type: { type: String, enum: ['treasury', 'investor'], required: true, index: true },
+  type: { type: String, enum: ['treasury', 'investor', 'farmer'], required: true, index: true },
   balance: { type: Number, default: 0, min: 0 }
 }, baseSchemaOptions(8, ret => {
   delete ret.secret;

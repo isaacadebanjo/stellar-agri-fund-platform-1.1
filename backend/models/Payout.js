@@ -9,8 +9,14 @@ const PayoutSchema = new mongoose.Schema({
   farmerName: { type: String, default: '' },
   farmerWallet: { type: String, default: '' },
   amount: { type: Number, required: true, min: 0 },
-  asset: { type: String, default: 'USDC' },
+  asset: { type: String, default: 'XLM' },
   note: { type: String, default: '' },
+  // Real Stellar testnet transfer details (treasury → farmer wallet). `status`
+  // is 'pending' before submission and 'success'/'failed' after.
+  status: { type: String, enum: ['pending', 'success', 'failed'], default: 'success', index: true },
+  txHash: { type: String, default: '' },
+  ledger: { type: Number, default: null },
+  network: { type: String, default: 'stellar-testnet' },
   timestamp: { type: Date, default: () => new Date() }
 }, baseSchemaOptions(10, ret => {
   // Keep timestamp as ISO string in API responses (matches prior shape).

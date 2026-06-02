@@ -121,7 +121,8 @@ The frontend opens an `EventSource` straight to the Render API (`<VITE_API_BASE_
 ## Testnet & Friendbot notes
 
 - Every transaction is signed with the **testnet** network passphrase, and the Horizon URL is validated at boot — the app cannot move real (mainnet) funds.
-- **Friendbot** is the testnet faucet used to fund new wallets (treasury + each new investor). It is testnet-only, time-boxed (so a flaky faucet can't hang a request), and can be turned off with `STELLAR_FRIENDBOT_ENABLED=false`.
+- **Friendbot** is the testnet faucet used to fund new wallets (treasury, each new investor, and each new **farmer**). It is testnet-only, time-boxed (so a flaky faucet can't hang a request), and can be turned off with `STELLAR_FRIENDBOT_ENABLED=false`.
+- **End-to-end on-chain money flow (testnet):** investor → treasury (real payment), treasury → project (internal allocation book-keeping, projects have no wallet), and **treasury → farmer payout is a real on-chain XLM transfer**. Farmers get an auto-provisioned, Friendbot-funded **custodial** testnet wallet on creation (mirrors investors), so payouts land in a real account with a verifiable tx hash (linked to Stellar Expert in the Payouts table). Payouts use the pending→settle→compensate pattern: a failed transfer refunds the project's reserved allocation and marks the payout `failed`.
 
 ## Non-custodial wallet login (Freighter & Albedo)
 
