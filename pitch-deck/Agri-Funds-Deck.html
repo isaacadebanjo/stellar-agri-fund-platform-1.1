@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agri Funds — Investor Deck</title>
+
+  <!-- Reveal.js (CDN). Requires internet the first time; the browser caches it. -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/white.css">
+
+  <style>
+    :root {
+      --green-dark: #065f46;
+      --green: #10b981;
+      --green-light: #d1fae5;
+      --ink: #0f172a;
+      --slate: #475569;
+      --slate-light: #94a3b8;
+      --bg: #f8fafc;
+    }
+    .reveal { font-family: "Segoe UI", system-ui, -apple-system, sans-serif; color: var(--slate); }
+    .reveal .slides { text-align: left; }
+    .reveal section { padding: 10px 20px; }
+    .reveal h1, .reveal h2, .reveal h3 { color: var(--ink); text-transform: none; font-weight: 700; letter-spacing: -0.5px; }
+    .reveal .kicker { color: var(--green); font-weight: 700; letter-spacing: 1.5px; font-size: 0.42em; text-transform: uppercase; margin-bottom: 6px; }
+    .reveal h2 { font-size: 1.5em; margin-bottom: 0.4em; line-height: 1.1; }
+    .reveal p, .reveal li { color: var(--slate); }
+    .reveal .lead { font-size: 0.62em; color: var(--slate); }
+    .reveal ul { display: block; margin-left: 1em; }
+    .reveal li { font-size: 0.62em; margin-bottom: 0.5em; line-height: 1.35; }
+    .reveal li b { color: var(--green-dark); }
+    .reveal .cols { display: flex; gap: 28px; align-items: flex-start; }
+    .reveal .col-main { flex: 1.6; }
+    .reveal .panel {
+      flex: 1; background: #fff; border: 2px solid var(--green-light);
+      border-radius: 14px; padding: 22px 18px; text-align: center;
+      font-size: 0.5em; color: var(--slate); line-height: 1.7;
+    }
+    .reveal .panel .ph { color: var(--green); font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; font-size: 0.85em; margin-bottom: 12px; display: block; }
+    .reveal .panel .mono { font-family: Consolas, monospace; color: var(--ink); font-weight: 700; }
+    .reveal .bar { position: absolute; top: 0; left: 0; right: 0; height: 8px; background: var(--green); }
+    .reveal .cover { background: var(--green-dark); }
+    section.cover, section.dark { color: #fff; }
+    section.cover h1 { color:#fff; font-size: 2.6em; margin-bottom: 0.1em; }
+    section.cover .tag { color: var(--green-light); font-size: 0.95em; }
+    section.cover .sub { color: #c7f9e5; font-size: 0.6em; margin-top: 18px; }
+    section.cover .foot { color: #8fe3c8; font-size: 0.5em; margin-top: 40px; }
+    section.dark h2 { color: #fff; }
+    section.dark li, section.dark p { color: var(--green-light); }
+    section.dark .kicker { color: var(--green); }
+    .logo-tile { display:inline-flex; width:64px;height:64px;border-radius:14px;background:var(--green);
+      align-items:center;justify-content:center;font-size:34px;margin-bottom:18px; }
+    .askcard { background: var(--green); color:#fff; border-radius:16px; padding:26px; text-align:center; font-size:0.6em; }
+    .askcard b { font-size:1.4em; display:block; margin-bottom:10px; }
+    .reveal .small { font-size: 0.42em; color: var(--slate-light); }
+    .pill { display:inline-block; background:var(--green-light); color:var(--green-dark);
+      border-radius:999px; padding:3px 12px; font-size:0.42em; font-weight:600; }
+  </style>
+</head>
+<body>
+<div class="reveal">
+  <div class="slides">
+
+    <!-- COVER -->
+    <section class="cover" data-background-color="#065f46">
+      <div class="bar"></div>
+      <div class="logo-tile">🌱</div>
+      <h1>Agri Funds</h1>
+      <div class="tag">Transparent Agricultural Capital, Settled on the Blockchain</div>
+      <div class="sub">Track every dollar from investor to farm and back — verifiable, real-time, audit-ready.</div>
+      <div class="foot">Investor Briefing · Prepared for Farming By Faith, ARA Concept &amp; Agricultural Investors</div>
+      <aside class="notes">Open warm and direct: "In the next ten minutes I'll show you a working platform
+        that makes agricultural capital fully transparent — and let you verify it isn't smoke and mirrors,
+        because the key money movements settle on a public blockchain."</aside>
+    </section>
+
+    <!-- 1 PROBLEM -->
+    <section>
+      <div class="bar"></div>
+      <div class="kicker">The Problem</div>
+      <h2>Agricultural Investment Runs on Blind Trust</h2>
+      <div class="cols">
+        <div class="col-main"><ul>
+          <li><b>Money disappears into a black box</b> — investors wire capital and hope; they can't see where it goes.</li>
+          <li><b>Operators reconcile by spreadsheet</b> — no shared source of truth between parties.</li>
+          <li><b>Profit splits spark disputes</b> — no transparent, agreed method for returns.</li>
+          <li><b>No audit trail</b> — when an investor or board asks "show me," there's nothing credible.</li>
+        </ul></div>
+        <div class="panel"><span class="ph">What investors see today</span>
+          Investor<br>↓<br><span class="mono">?&nbsp;&nbsp;?&nbsp;&nbsp;?</span><br>↓<br>Farmer<br><br>No proof. No trail.</div>
+      </div>
+      <aside class="notes">The bottleneck to unlocking agricultural capital isn't crop risk — it's opacity and trust.
+        Every agri-investor's real fear is not knowing. That fear keeps capital on the sidelines.</aside>
+    </section>
+
+    <!-- 2 VISION -->
+    <section>
+      <div class="bar"></div>
+      <div class="kicker">Vision &amp; Opportunity</div>
+      <h2>Make Every Dollar Traceable, Every Return Provable</h2>
+      <div class="cols">
+        <div class="col-main"><ul>
+          <li><b>A transparency-first capital platform</b> — money flows on a verifiable ledger, not a spreadsheet.</li>
+          <li><b>Investors self-verify</b> — critical payments settle on a public blockchain they can check.</li>
+          <li><b>Operators get real-time intelligence</b> — live treasury, liquidity health, obligations.</li>
+          <li><b>Trust becomes a property of the system</b> — we don't ask for trust; we prove it.</li>
+        </ul></div>
+        <div class="panel"><span class="ph">The shift</span>
+          Opaque spreadsheet<br>→<br>Live, on-chain<br>verified dashboard<br><br>Trust by proof,<br>not by promise</div>
+      </div>
+      <aside class="notes">Our opportunity: become the financial operating system for faith-based and impact
+        agri-funds, where transparency is the product itself.</aside>
+    </section>
+
+    <!-- 3 OVERVIEW -->
+    <section>
+      <div class="bar"></div>
+      <div class="kicker">Platform Overview</div>
+      <h2>One Platform, the Full Capital Lifecycle</h2>
+      <div class="cols">
+        <div class="col-main"><ul>
+          <li><b>Capital intake</b> — onboarding, custodial + non-custodial wallets, funding & investment.</li>
+          <li><b>Treasury & deployment</b> — central treasury, project allocation, farmer payouts with guardrails.</li>
+          <li><b>Revenue & investor returns</b> — revenue capture, profit calc, on-chain distributions.</li>
+          <li><b>Transparency layer</b> — unified ledger, audit log, PDF statements, live dashboards.</li>
+        </ul></div>
+        <div class="panel"><span class="ph">Lifecycle</span>
+          Investor<br>↓<br>Treasury<br>↓<br>Project → Farmer<br>↓<br>Profit → Investor</div>
+      </div>
+      <aside class="notes">This is not a concept deck. Everything here exists and runs today — a deployed
+        system on Stellar testnet, with admin and investor roles live.</aside>
+    </section>
+
+    <!-- 4 ARCHITECTURE -->
+    <section>
+      <div class="bar"></div>
+      <div class="kicker">System Architecture</div>
+      <h2>Built Like a Fintech, Settled Like a Blockchain</h2>
+      <div class="cols">
+        <div class="col-main"><ul>
+          <li><b>Modern 3-tier, horizontally scalable</b> — React PWA ⇄ secured Express API ⇄ MongoDB Atlas.</li>
+          <li><b>Blockchain settlement layer</b> — Stellar testnet via Horizon for real on-chain payments.</li>
+          <li><b>Financial-grade safety</b> — idempotent + atomic money ops; no double/overspends (test-proven).</li>
+          <li><b>Hardened & tested</b> — encrypted custody, JWT + revocation, RBAC, rate limiting, CI.</li>
+        </ul></div>
+        <div class="panel"><span class="ph">Stack</span>
+          React PWA<br>↓ JWT / live SSE<br>Express API<br>↓<br>MongoDB &nbsp;+&nbsp; Stellar<br>
+          <span class="small">ledger&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;on-chain</span></div>
+      </div>
+      <aside class="notes">Deliberately boring where it should be — proven, scalable, stateless — and innovative
+        where it matters: real settlement and bank-grade transaction correctness.</aside>
+    </section>
+
+    <!-- 5 INVESTOR JOURNEY -->
+    <section>
+      <div class="bar"></div>
+      <div class="kicker">Investor Journey</div>
+      <h2>From Connect to Confidence</h2>
+      <div class="cols">
+        <div class="col-main"><ul>
+          <li><b>1 — Sign in your way</b> — email, or connect your own Stellar wallet (Freighter/Albedo); keys stay with you.</li>
+          <li><b>2 — Fund & invest</b> — capital moves to the treasury as a real on-chain transaction with a ledger hash.</li>
+          <li><b>3 — Watch it deploy live</b> — real-time dashboards show allocation, projects, returns.</li>
+          <li><b>4 — Get paid & verify</b> — distributions paid on-chain; download a PDF; verify on the public ledger.</li>
+        </ul></div>
+        <div class="panel"><span class="ph">Every payout</span>
+          carries a real<br>Stellar tx hash<br><br><span class="mono">GABC…hash</span><br><br>
+          Verifiable by anyone, anytime</div>
+      </div>
+      <aside class="notes">Investors never lose sight of their money — and can independently verify payouts on
+        the public ledger. We don't ask for trust; we prove it.</aside>
+    </section>
+
+    <!-- 6 TREASURY -->
+    <section>
+      <div class="bar"></div>
+      <div class="kicker">Treasury &amp; Capital Management</div>
+      <h2>Real-Time Command Over Capital</h2>
+      <div class="cols">
+        <div class="col-main"><ul>
+          <li><b>Live treasury intelligence</b> — on-chain balance, capital-utilization %, available liquidity with reserve buffer.</li>
+          <li><b>Liquidity health at a glance</b> — Healthy / Tight / Critical badge + pending-obligations tracker.</li>
+          <li><b>Historical flow analytics</b> — inflow/outflow trends and running balance.</li>
+          <li><b>Over-allocation is impossible</b> — treasury debits are atomic and race-free.</li>
+        </ul></div>
+        <div class="panel"><span class="ph">Liquidity health</span>
+          <span class="pill">Healthy</span> &nbsp; Tight &nbsp; Critical<br><br>
+          Available = Balance −<br>Obligations − Reserve</div>
+      </div>
+      <aside class="notes">Operators stop flying blind: runway, obligations, and utilization in real time — and
+        the platform itself enforces solvency.</aside>
+    </section>
+
+    <!-- 7 BLOCKCHAIN -->
+    <section>
+      <div class="bar"></div>
+      <div class="kicker">Blockchain &amp; Transparency</div>
+      <h2>Verifiable, Not Just Visible</h2>
+      <div class="cols">
+        <div class="col-main"><ul>
+          <li><b>Real on-chain settlement</b> — investments and investor distributions submit real Stellar payments with hashes.</li>
+          <li><b>Self-custody option (SEP-10)</b> — investors prove wallet ownership without exposing a private key.</li>
+          <li><b>Encrypted & testnet-locked</b> — custodial seeds AES-256-GCM encrypted; mainnet blocked at startup.</li>
+          <li><b>Complete audit trail</b> — unified ledger + 16-type activity log.</li>
+        </ul></div>
+        <div class="panel"><span class="ph">Transaction card</span>
+          Invest 120 XLM<br>status: success<br><br><span class="mono">tx: GABC…9F2</span><br>
+          → Stellar explorer<br><br>Independently checkable</div>
+      </div>
+      <aside class="notes">Anyone can paint numbers on a screen. We anchor the critical money movements to a
+        public blockchain — the difference between visible and verifiable.</aside>
+    </section>
+
+    <!-- 8 REPORTING -->
+    <section>
+      <div class="bar"></div>
+      <div class="kicker">Reporting, Compliance &amp; Audit</div>
+      <h2>Audit-Ready by Design</h2>
+      <div class="cols">
+        <div class="col-main"><ul>
+          <li><b>Every action logged</b> — 16 audit action types; who, what, when, outcome — immutably recorded.</li>
+          <li><b>Investor & project rollups</b> — performance, revenue-vs-payout, profit trends.</li>
+          <li><b>One-click investor statements</b> — downloadable PDFs; JSON export for analysts.</li>
+          <li><b>Dispute & regulator ready</b> — a complete paper trail, without the paper.</li>
+        </ul></div>
+        <div class="panel"><span class="ph">Audit feed</span>
+          CREATE_INVESTOR ✓<br>INVESTMENT ✓<br>ALLOCATION ✓<br>DISTRIBUTION_PAID ✓<br>
+          STATEMENT_GENERATED ✓</div>
+      </div>
+      <aside class="notes">When an investor, board, or regulator says "show me," the answer is one click — not a
+        week of spreadsheet archaeology.</aside>
+    </section>
+
+    <!-- 9 ROADMAP -->
+    <section>
+      <div class="bar"></div>
+      <div class="kicker">Scalability &amp; Roadmap</div>
+      <h2>From Testnet MVP to Financial Infrastructure</h2>
+      <div class="cols">
+        <div class="col-main"><ul>
+          <li><b>Now — proven core</b> — working transparent capital flows with real on-chain settlement on testnet.</li>
+          <li><b>Next — production money</b> — USDC stablecoin + mainnet; on-chain wallets for projects & farmers; KYC/AML.</li>
+          <li><b>Then — precision & scale</b> — per-investor→project tranche ledgering, multi-fund, fiat ramps, mobile.</li>
+          <li><b>Future — programmable trust</b> — Soroban smart contracts for escrow & self-executing distributions.</li>
+        </ul></div>
+        <div class="panel"><span class="ph">Roadmap</span>
+          Now → proven core<br>Next → USDC + mainnet<br>Then → scale + precision<br>Future → smart contracts</div>
+      </div>
+      <aside class="notes">We've de-risked the hard part — the working transparent core. The roadmap is a funded,
+        sequenced path from testnet proof to production financial infrastructure.</aside>
+    </section>
+
+    <!-- 10 NEXT STEPS -->
+    <section class="dark" data-background-color="#065f46">
+      <div class="bar"></div>
+      <div class="kicker">Demo Summary &amp; Next Steps</div>
+      <h2>Working Today. Ready to Scale With You.</h2>
+      <div class="cols">
+        <div class="col-main">
+          <p style="color:var(--green);font-weight:700;font-size:0.6em;margin-bottom:6px;">WHAT YOU SAW</p>
+          <ul>
+            <li>A live, deployed platform proving transparent agri-capital management end-to-end</li>
+            <li>Real on-chain settlement of investments and investor distributions</li>
+            <li>Treasury intelligence, full audit trail, and investor PDF statements</li>
+          </ul>
+          <p style="color:var(--green);font-weight:700;font-size:0.6em;margin:10px 0 6px;">THE ASK</p>
+          <ul>
+            <li>Partnership to onboard the first real projects and investors</li>
+            <li>Capital to reach mainnet + USDC, add compliance, and launch the first cohort</li>
+          </ul>
+        </div>
+        <div class="panel askcard">
+          <b>Let's build the transparent agri-fund together.</b>
+          Founding partners:<br>Farming By Faith · ARA Concept
+        </div>
+      </div>
+      <aside class="notes">Close with conviction: "This is real and running today. We're inviting you to be the
+        founding partners of the transparent agri-fund — let's put the first real projects on it together."
+        Then stop and invite questions.</aside>
+    </section>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    transition: 'slide',
+    width: 1280,
+    height: 720,
+    margin: 0.04,
+    controls: true,
+    progress: true,
+    slideNumber: 'c/t',
+    plugins: [ RevealNotes ]
+  });
+</script>
+</body>
+</html>

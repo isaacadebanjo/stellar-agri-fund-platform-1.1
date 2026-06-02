@@ -4,7 +4,7 @@ import { Button, Input, Field, ErrorBanner } from './ui.jsx';
 import ConnectWallet from './ConnectWallet.jsx';
 
 const DEMOS = [
-  { label: 'Admin',    email: 'admin@agri.io',    password: 'admin123'    },
+  { label: 'Admin',    email: 'admin@agri.io',    password: '123456'      },
   { label: 'Investor', email: 'investor@agri.io', password: 'investor123' }
 ];
 
