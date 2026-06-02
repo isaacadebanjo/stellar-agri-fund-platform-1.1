@@ -10,6 +10,7 @@ import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
 import { idempotent } from '../middleware/idempotency.js';
 import { moneyLimiter } from '../middleware/rateLimit.js';
+import { allocationGate, milestoneAllocationGate } from '../middleware/governance.js';
 import { paginate, listResponse } from '../services/pagination.js';
 import { amount, id } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
@@ -136,7 +137,7 @@ r.post('/invest', moneyLimiter, idempotent('POST /api/transactions/invest'), asy
 
 // Treasury → Project allocation. Projects don't have on-chain wallets in this
 // app — allocations are internal book-keeping against treasury balance.
-r.post('/allocate', moneyLimiter, idempotent('POST /api/transactions/allocate'), asyncH(async (req, res) => {
+r.post('/allocate', moneyLimiter, milestoneAllocationGate, allocationGate, idempotent('POST /api/transactions/allocate'), asyncH(async (req, res) => {
   const projectId = id(req.body?.projectId, 'projectId');
   const value = amount(req.body?.amount);
 

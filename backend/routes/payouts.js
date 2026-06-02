@@ -10,6 +10,7 @@ import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
 import { idempotent } from '../middleware/idempotency.js';
 import { moneyLimiter } from '../middleware/rateLimit.js';
+import { payoutGate } from '../middleware/governance.js';
 import { paginate, listResponse } from '../services/pagination.js';
 import { amount, id } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
@@ -38,7 +39,7 @@ r.get('/', asyncH(async (req, res) => {
 // + ledger row BEFORE funds move (so a mid-flight crash is auditable), submit
 // the on-chain payment, then settle — or compensate (refund the reservation,
 // mark failed) if the transfer is rejected.
-r.post('/', moneyLimiter, idempotent('POST /api/payouts'), asyncH(async (req, res) => {
+r.post('/', moneyLimiter, payoutGate, idempotent('POST /api/payouts'), asyncH(async (req, res) => {
   const projectId = id(req.body?.projectId, 'projectId');
   const farmerId = id(req.body?.farmerId, 'farmerId');
   const value = amount(req.body?.amount);

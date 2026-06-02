@@ -4,6 +4,7 @@ import Revenue from '../models/Revenue.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
 import { round, sub } from '../services/money.js';
+import { closureGate } from '../middleware/governance.js';
 import { nonEmptyString, optionalIsoDate, nonNegativeNumber } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
@@ -25,6 +26,7 @@ function enrich(p, revenue) {
     allocated: p.allocated,
     spent: p.spent,
     hectares: p.hectares || 0,
+    governanceEnabled: Boolean(p.governanceEnabled),
     createdAt: p.createdAt,
     paidOut: p.spent,
     remaining: sub(p.allocated, p.spent),
@@ -60,7 +62,8 @@ r.post('/', asyncH(async (req, res) => {
     status: status || 'active',
     startDate: startDate || '',
     endDate: endDate || '',
-    hectares
+    hectares,
+    governanceEnabled: Boolean(req.body?.governanceEnabled)
   });
 
   // Log project creation
@@ -82,9 +85,10 @@ r.post('/', asyncH(async (req, res) => {
   res.status(201).json(enrich(project.toObject(), 0));
 }));
 
-// Update project fields (status, dates, crop, etc.)
-r.patch('/:id', asyncH(async (req, res) => {
-  const allowed = ['name', 'description', 'cropType', 'status', 'startDate', 'endDate', 'hectares'];
+// Update project fields (status, dates, crop, etc.). closureGate only engages
+// when status moves to completed/cancelled AND closure approval is enabled.
+r.patch('/:id', closureGate, asyncH(async (req, res) => {
+  const allowed = ['name', 'description', 'cropType', 'status', 'startDate', 'endDate', 'hectares', 'governanceEnabled'];
   const update = {};
   for (const k of allowed) {
     if (req.body && req.body[k] !== undefined) update[k] = req.body[k];
@@ -92,6 +96,7 @@ r.patch('/:id', asyncH(async (req, res) => {
   if (update.startDate !== undefined) optionalIsoDate(update.startDate, 'startDate');
   if (update.endDate !== undefined) optionalIsoDate(update.endDate, 'endDate');
   if (update.hectares !== undefined) update.hectares = nonNegativeNumber(update.hectares, 'hectares');
+  if (update.governanceEnabled !== undefined) update.governanceEnabled = Boolean(update.governanceEnabled);
   const project = await Project.findByIdAndUpdate(req.params.id, update, {
     new: true,
     runValidators: true

@@ -51,12 +51,12 @@ export default function Distributions({ refreshKey, onChange }) {
     }
     setBusy(true);
     try {
-      await api.distributions.generate(projectId, {
+      const res = await api.distributions.generate(projectId, {
         platformFeePercent: feePct,
         periodStart: period.start,
         periodEnd: period.end
       });
-      setErr('');
+      setErr(res?.pendingApproval ? res.message : '');
       await load(); onChange?.();
     } catch (e) { setErr(e.message); }
     setBusy(false);

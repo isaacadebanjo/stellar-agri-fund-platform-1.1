@@ -18,6 +18,8 @@ import Payments from './components/Payments.jsx';
 import KpiDashboard from './components/KpiDashboard.jsx';
 import Yields from './components/Yields.jsx';
 import InvestorConfidence from './components/InvestorConfidence.jsx';
+import Governance from './components/Governance.jsx';
+import Milestones from './components/Milestones.jsx';
 import Login from './components/Login.jsx';
 import InstallPrompt from './components/InstallPrompt.jsx';
 import { WalletBadge } from './components/ConnectWallet.jsx';
@@ -61,6 +63,13 @@ const NAV = [
       { id: 'offtake',    label: 'Offtake',         subtitle: 'Purchase agreements & contracts',  icon: IconReport,   roles: ['admin'] },
       { id: 'deliveries', label: 'Sales & Delivery', subtitle: 'Harvest deliveries vs contracts',  icon: IconArrowUp,  roles: ['admin'] },
       { id: 'payments',   label: 'Payments',        subtitle: 'Invoices & payment cycles',        icon: IconArrowDown, roles: ['admin'] }
+    ]
+  },
+  {
+    section: 'Governance',
+    items: [
+      { id: 'governance', label: 'Approvals',  subtitle: 'Pending approvals & history',          icon: IconAudit, roles: ['admin'] },
+      { id: 'milestones', label: 'Milestones', subtitle: 'Milestone-based capital release',      icon: IconList,  roles: ['admin'] }
     ]
   },
   {
@@ -257,6 +266,8 @@ function Shell({ user, logout }) {
           {tab === 'payments'       && isAdmin && <Payments refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'kpi'            && isAdmin && <KpiDashboard refreshKey={refreshKey} />}
           {tab === 'yields'         && isAdmin && <Yields refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'governance'     && isAdmin && <Governance refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'milestones'     && isAdmin && <Milestones refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'distributions'  && isAdmin && <Distributions refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'activity'       && isAdmin && <Activity refreshKey={refreshKey} />}
           {tab === 'reports'        && isAdmin && <Reports refreshKey={refreshKey} />}

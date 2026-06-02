@@ -31,14 +31,14 @@ export default function Payouts({ refreshKey, onChange }) {
     if (!form.farmerId) { setErr('Add a farmer in the Farmers tab first.'); return; }
     setBusy(true);
     try {
-      await api.payouts.create({
+      const res = await api.payouts.create({
         projectId: form.projectId,
         farmerId: form.farmerId,
         amount: Number(form.amount),
         note: form.note.trim()
       });
       setForm(f => ({ ...f, amount: '', note: '' }));
-      setErr('');
+      setErr(res?.pendingApproval ? res.message : '');
       await load(); onChange?.();
     } catch (e) { setErr(e.message); }
     setBusy(false);

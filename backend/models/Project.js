@@ -14,7 +14,11 @@ const ProjectSchema = new mongoose.Schema({
   allocated: { type: Number, default: 0, min: 0 },
   spent: { type: Number, default: 0, min: 0 },
   // Hectares under cultivation — feeds per-hectare KPIs. Additive, defaults to 0.
-  hectares: { type: Number, default: 0, min: 0 }
+  hectares: { type: Number, default: 0, min: 0 },
+  // When true, treasury allocations to this project are gated on approved
+  // milestone release budget (milestone-based capital release). Off by default
+  // so existing projects/flows are unaffected.
+  governanceEnabled: { type: Boolean, default: false }
 }, baseSchemaOptions());
 
 export default mongoose.model('Project', ProjectSchema);

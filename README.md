@@ -84,6 +84,11 @@ Manual setup (no Blueprint) — create a **Web Service** with:
 | `SEED_DEMO_USERS` | no | Leave `false` in production |
 | `MONEY_RATE_LIMIT_MAX` | no | Max money-moving requests (invest/allocate/fund/payout/distribution) per client per minute. Default `30` |
 | `WALLET_AUTH_RATE_LIMIT_MAX` | no | Max SEP-10 wallet auth attempts per client per 15 min. Default `20` |
+| `GOVERNANCE_ALLOCATION_THRESHOLD` | no | Allocations above this (XLM) require approval. Unset = ungated |
+| `GOVERNANCE_PAYOUT_THRESHOLD` | no | Farmer payouts above this (XLM) require approval. Unset = ungated |
+| `GOVERNANCE_DISTRIBUTION_REQUIRES_APPROVAL` | no | `true` = every distribution run requires approval |
+| `GOVERNANCE_PROJECT_CLOSURE_REQUIRES_APPROVAL` | no | `true` = closing a project (completed/cancelled) requires approval |
+| `GOVERNANCE_ALLOW_SELF_APPROVE` | no | Default allows; set `false` for segregation of duties (a different admin must approve) |
 | `PORT` | no | Injected by Render automatically |
 
 The server validates this configuration at startup and **exits with a clear error** if anything required is missing or malformed (e.g. a non-hex `WALLET_ENC_KEY`, or a mainnet Horizon URL).
@@ -191,6 +196,13 @@ GET/POST/PATCH /api/invoices         # payment cycles + /api/invoices/summary
 GET/POST/PATCH /api/yields           # crop yields + /api/yields/summary (efficiency, trend)
 GET /api/kpi/overview                # operational KPIs (per-hectare, margins, ROI, by-project)
 GET /api/investor-confidence         # readiness rollup (admin + investor)
+
+# Institutional Readiness — Governance (Phase 3)
+GET /api/governance/pending          # approvals queue
+GET /api/governance                  # approval history
+POST /api/governance/:id/approve     # approve (re-run the action to execute)
+POST /api/governance/:id/reject
+GET/POST/PATCH /api/milestones       # milestones + /:id/approve, /:id/reject, /release-budget/:projectId
 ```
 
 Write paths that move funds accept an `Idempotency-Key` header so a retried request never double-spends.
@@ -217,4 +229,8 @@ A governance/due-diligence layer being built on top of the platform, **without t
 - **Yield Reporting** — expected vs actual yield per growing cycle, variance, efficiency %, and a yield trend chart.
 - **Investor Confidence Dashboard** (visible to investors too) — capital deployed/remaining, contracted revenue, buyer coverage, yield performance, payment-collection rate, ROI, and a composite governance/readiness score.
 
-Phase 3 (governance approvals + milestone-gated capital release) is planned but not yet built.
+**Phase 3 — Governance** (opt-in; **off by default** so existing money flows are unchanged):
+- **Approvals** — sensitive actions over a configured threshold (allocations, payouts) or flagged (distribution runs, project closure) are held as **pending approval requests** instead of executing. An approver approves/rejects in the **Approvals** queue; re-running the approved action then executes it (the approval is consumed so it can't be reused). Optional segregation of duties (`GOVERNANCE_ALLOW_SELF_APPROVE=false`).
+- **Milestone-based capital release** — when a project has governance enabled, treasury allocations are capped at the sum of **approved milestones'** release amounts. Milestones carry completion %, target dates, and verification-document links.
+
+These are implemented as **middleware in front of** the existing allocate/payout/distribution handlers — the handlers are unchanged, and with no `GOVERNANCE_*` env vars set every gate is a no-op.

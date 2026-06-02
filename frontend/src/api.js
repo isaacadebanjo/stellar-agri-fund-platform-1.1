@@ -157,6 +157,21 @@ export const api = {
   },
   kpi: () => request('GET', '/api/kpi/overview'),
   investorConfidence: () => request('GET', '/api/investor-confidence'),
+  // --- Institutional Readiness: Governance (Phase 3) ---
+  governance: {
+    pending: () => request('GET', '/api/governance/pending'),
+    list: (params) => request('GET', '/api/governance' + qs(params)),
+    approve: (id, comments) => request('POST', `/api/governance/${id}/approve`, { comments }),
+    reject: (id, comments) => request('POST', `/api/governance/${id}/reject`, { comments })
+  },
+  milestones: {
+    list: (projectId) => request('GET', '/api/milestones' + qs({ projectId })),
+    releaseBudget: (projectId) => request('GET', `/api/milestones/release-budget/${projectId}`),
+    create: (data) => request('POST', '/api/milestones', data),
+    update: (id, data) => request('PATCH', `/api/milestones/${id}`, data),
+    approve: (id) => request('POST', `/api/milestones/${id}/approve`),
+    reject: (id) => request('POST', `/api/milestones/${id}/reject`)
+  },
   revenue: {
     list: (projectId) => request('GET', '/api/revenue' + (projectId ? `?projectId=${projectId}` : '')),
     create: (data) => request('POST', '/api/revenue', data)

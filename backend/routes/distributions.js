@@ -13,6 +13,7 @@ import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
 import { idempotent } from '../middleware/idempotency.js';
 import { moneyLimiter } from '../middleware/rateLimit.js';
+import { distributionGate } from '../middleware/governance.js';
 import { paginate, listResponse } from '../services/pagination.js';
 import { id, feePercent, optionalIsoDate } from '../services/validate.js';
 import { round, sum, add, sub, pct } from '../services/money.js';
@@ -134,7 +135,7 @@ r.get('/preview/:projectId', requireRole('admin'), asyncH(async (req, res) => {
 // periodEnd) index is created first inside the transaction; a second generate
 // for the same project + period hits the unique index and returns 409, so an
 // admin can't double-generate the same period (even on a concurrent submit).
-r.post('/generate', requireRole('admin'), moneyLimiter, idempotent('POST /api/distributions/generate'), asyncH(async (req, res) => {
+r.post('/generate', requireRole('admin'), moneyLimiter, distributionGate, idempotent('POST /api/distributions/generate'), asyncH(async (req, res) => {
   const projectId = id(req.body?.projectId, 'projectId');
   const project = await Project.findById(projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });
