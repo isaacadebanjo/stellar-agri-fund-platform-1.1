@@ -82,6 +82,8 @@ Manual setup (no Blueprint) — create a **Web Service** with:
 | `SEP10_SERVER_SECRET` | no | Enables non-custodial wallet login (SEP-10). Stellar secret seed (`S...`), **testnet only**, distinct from any wallet keys. Unset = wallet login disabled |
 | `SEP10_HOME_DOMAIN` | no | Label embedded in SEP-10 challenges. Default `agri-funds.testnet` |
 | `SEED_DEMO_USERS` | no | Leave `false` in production |
+| `MONEY_RATE_LIMIT_MAX` | no | Max money-moving requests (invest/allocate/fund/payout/distribution) per client per minute. Default `30` |
+| `WALLET_AUTH_RATE_LIMIT_MAX` | no | Max SEP-10 wallet auth attempts per client per 15 min. Default `20` |
 | `PORT` | no | Injected by Render automatically |
 
 The server validates this configuration at startup and **exits with a clear error** if anything required is missing or malformed (e.g. a non-hex `WALLET_ENC_KEY`, or a mainnet Horizon URL).
@@ -161,6 +163,14 @@ POST /api/investors                  { name, email? }       # admin; Friendbot-f
 POST /api/transactions/invest        { investorId, amount }
 POST /api/transactions/allocate      { projectId, amount }
 GET  /api/treasury/overview
+POST /api/distributions/generate     { projectId, platformFeePercent?, periodStart?, periodEnd? }
 ```
 
 Write paths that move funds accept an `Idempotency-Key` header so a retried request never double-spends.
+
+Additional API behaviors:
+
+- **Request correlation** — every response carries an `X-Request-Id` header (honoring an inbound one if present); the id also appears in the access log line for tracing.
+- **Money/auth rate limits** — money-moving and wallet-auth endpoints are rate-limited (see `MONEY_RATE_LIMIT_MAX` / `WALLET_AUTH_RATE_LIMIT_MAX`); exceeding the limit returns `429`.
+- **Distribution periods** — `POST /api/distributions/generate` records a reporting period (`periodStart`/`periodEnd`, defaulting to the current month-to-date). Each `(project, periodStart, periodEnd)` can be generated only once; a repeat returns `409` so a period can't be double-distributed.
+- **Opt-in pagination** — list endpoints (`/api/transactions`, `/api/investors`, `/api/payouts`, `/api/distributions`) return the full array by default, or a `{ data, pagination }` envelope when `page`/`limit` query params are supplied.

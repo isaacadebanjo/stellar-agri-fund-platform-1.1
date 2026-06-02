@@ -49,6 +49,34 @@ async function request(method, url, body, { idempotencyKey } = {}) {
   return res.json();
 }
 
+// Like `request`, but for binary downloads (e.g. PDF statements): same
+// API_BASE, auth header and 401 handling, but resolves to a Blob.
+async function requestBlob(url) {
+  const headers = {};
+  const token = tokenStore.get();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(API_BASE + url, { headers });
+
+  if (res.status === 401) {
+    tokenStore.clear();
+    if (onUnauthorized) onUnauthorized();
+    throw new Error('Session expired — please sign in again');
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Request failed');
+  }
+  return res.blob();
+}
+
+// Build a query string from a params object, skipping empty values.
+function qs(params = {}) {
+  const entries = Object.entries(params).filter(([, v]) => v !== '' && v !== undefined && v !== null);
+  if (entries.length === 0) return '';
+  return '?' + new URLSearchParams(entries).toString();
+}
+
 export const api = {
   auth: {
     login: (email, password) => request('POST', '/api/auth/login', { email, password }),
@@ -74,7 +102,8 @@ export const api = {
     update: (id, data) => request('PATCH', `/api/projects/${id}`, data)
   },
   transactions: {
-    list: () => request('GET', '/api/transactions'),
+    // No params → full array (back-compat). With page/limit → { data, pagination }.
+    list: (params) => request('GET', '/api/transactions' + qs(params)),
     invest: (investorId, amount) =>
       request('POST', '/api/transactions/invest', { investorId, amount }, { idempotencyKey: newIdempotencyKey() }),
     allocate: (projectId, amount) =>
@@ -82,7 +111,7 @@ export const api = {
   },
   payouts: {
     list: () => request('GET', '/api/payouts'),
-    create: (data) => request('POST', '/api/payouts', data)
+    create: (data) => request('POST', '/api/payouts', data, { idempotencyKey: newIdempotencyKey() })
   },
   farmers: {
     list: () => request('GET', '/api/farmers'),
@@ -99,8 +128,10 @@ export const api = {
     },
     preview: (projectId, platformFeePercent = 10) =>
       request('GET', `/api/distributions/preview/${projectId}?platformFeePercent=${platformFeePercent}`),
-    generate: (projectId, platformFeePercent = 10) =>
-      request('POST', '/api/distributions/generate', { projectId, platformFeePercent }, { idempotencyKey: newIdempotencyKey() }),
+    generate: (projectId, { platformFeePercent = 10, periodStart, periodEnd } = {}) =>
+      request('POST', '/api/distributions/generate',
+        { projectId, platformFeePercent, periodStart, periodEnd },
+        { idempotencyKey: newIdempotencyKey() }),
     markPaid: (id) =>
       request('POST', `/api/distributions/${id}/mark-paid`, undefined, { idempotencyKey: newIdempotencyKey() })
   },
@@ -120,6 +151,11 @@ export const api = {
   events: {
     // Short-lived ticket the SSE EventSource uses instead of the session token.
     ticket: () => request('GET', '/api/events/ticket')
+  },
+  statements: {
+    // Investor PDF statement (binary download). Backend route is
+    // /api/statements/:id/statement/pdf.
+    downloadPdf: (investorId) => requestBlob(`/api/statements/${investorId}/statement/pdf`)
   },
   treasury: {
     overview: () => request('GET', '/api/treasury/overview'),

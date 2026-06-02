@@ -1,15 +1,20 @@
 import { Router } from 'express';
+import mongoose from 'mongoose';
 import Distribution from '../models/Distribution.js';
+import DistributionRun from '../models/DistributionRun.js';
 import Investor from '../models/Investor.js';
 import Project from '../models/Project.js';
 import Revenue from '../models/Revenue.js';
 import Transaction from '../models/Transaction.js';
 import Wallet from '../models/Wallet.js';
-import { transferXLM, ASSET, NETWORK } from '../services/stellar.js';
+import { transferXLM, ASSET } from '../services/stellar.js';
 import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
 import { idempotent } from '../middleware/idempotency.js';
+import { moneyLimiter } from '../middleware/rateLimit.js';
+import { paginate, listResponse } from '../services/pagination.js';
+import { id, feePercent, optionalIsoDate } from '../services/validate.js';
 import { round, sum, add, sub, pct } from '../services/money.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
@@ -63,7 +68,13 @@ r.get('/', asyncH(async (req, res) => {
     filter.investorId = req.user.investorId;
   }
 
-  const dists = await Distribution.find(filter).sort({ timestamp: -1 });
+  const pg = paginate(req.query);
+  const cursor = Distribution.find(filter).sort({ timestamp: -1 });
+  if (pg) cursor.skip(pg.skip).limit(pg.limit);
+  const [dists, total] = await Promise.all([
+    cursor,
+    pg ? Distribution.countDocuments(filter) : Promise.resolve(0)
+  ]);
 
   // Bulk fetch investor + project names to avoid N+1.
   const invIds = [...new Set(dists.map(d => d.investorId))];
@@ -74,18 +85,19 @@ r.get('/', asyncH(async (req, res) => {
   ]);
   const invMap = new Map(investors.map(i => [i._id, i.name]));
   const projMap = new Map(projects.map(p => [p._id, p.name]));
-  res.json(dists.map(d => ({
+  const rows = dists.map(d => ({
     ...d.toJSON(),
     investorName: invMap.get(d.investorId) || 'Unknown',
     projectName: projMap.get(d.projectId) || 'Unknown'
-  })));
+  }));
+  res.json(pg ? listResponse(rows, total, pg) : rows);
 }));
 
 // Preview the distribution split for a project without persisting it.
 r.get('/preview/:projectId', requireRole('admin'), asyncH(async (req, res) => {
   const project = await Project.findById(req.params.projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });
-  const platformFeePercent = Number(req.query.platformFeePercent ?? 10);
+  const platformFeePercent = feePercent(req.query.platformFeePercent);
 
   const revAgg = await Revenue.aggregate([
     { $match: { projectId: project._id } },
@@ -116,12 +128,28 @@ r.get('/preview/:projectId', requireRole('admin'), asyncH(async (req, res) => {
   });
 }));
 
-// Generate (persist) distribution records for a project.
-r.post('/generate', requireRole('admin'), idempotent('POST /api/distributions/generate'), asyncH(async (req, res) => {
-  const { projectId, platformFeePercent } = req.body || {};
+// Generate (persist) distribution records for a project over a reporting period.
+//
+// Duplicate guard: a DistributionRun with a unique (projectId, periodStart,
+// periodEnd) index is created first inside the transaction; a second generate
+// for the same project + period hits the unique index and returns 409, so an
+// admin can't double-generate the same period (even on a concurrent submit).
+r.post('/generate', requireRole('admin'), moneyLimiter, idempotent('POST /api/distributions/generate'), asyncH(async (req, res) => {
+  const projectId = id(req.body?.projectId, 'projectId');
   const project = await Project.findById(projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });
-  const feePct = Number(platformFeePercent ?? 10);
+  const feePct = feePercent(req.body?.platformFeePercent);
+
+  // Reporting period. Defaults to the current calendar month-to-date when not
+  // supplied; the UI prefills and shows it so the run is always explicit.
+  const now = new Date();
+  const defaultStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  const defaultEnd = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const periodStart = optionalIsoDate(req.body?.periodStart, 'periodStart') || defaultStart;
+  const periodEnd = optionalIsoDate(req.body?.periodEnd, 'periodEnd') || defaultEnd;
+  if (periodEnd < periodStart) {
+    return res.status(400).json({ error: 'periodEnd must be on or after periodStart' });
+  }
 
   const revAgg = await Revenue.aggregate([
     { $match: { projectId: project._id } },
@@ -136,26 +164,56 @@ r.post('/generate', requireRole('admin'), idempotent('POST /api/distributions/ge
   const platformFee = pct(grossProfit, feePct);
   const netProfit = sub(grossProfit, platformFee);
 
-  const shares = await investorShares();
+  const shares = (await investorShares()).filter(s => s.sharePercent > 0);
   if (shares.length === 0) {
     return res.status(400).json({ error: 'No investors with funded investments yet.' });
   }
 
-  const now = new Date();
-  const docs = shares
-    .filter(s => s.sharePercent > 0)
-    .map(s => ({
-      investorId: s.investorId,
-      projectId: project._id,
-      amount: pct(netProfit, s.sharePercent),
-      sharePercent: s.sharePercent,
-      platformFeePercent: feePct,
-      grossProfit: round(grossProfit),
-      netProfit,
-      status: 'pending',
-      timestamp: now
-    }));
-  const created = await Distribution.insertMany(docs);
+  const now2 = new Date();
+  let run;
+  let created;
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => {
+      // Unique (projectId, periodStart, periodEnd) — throws 11000 on a repeat.
+      const [createdRun] = await DistributionRun.create([{
+        projectId: project._id,
+        periodStart,
+        periodEnd,
+        platformFeePercent: feePct,
+        grossProfit: round(grossProfit),
+        netProfit,
+        investorCount: shares.length,
+        timestamp: now2
+      }], { session });
+      run = createdRun;
+
+      const docs = shares.map(s => ({
+        investorId: s.investorId,
+        projectId: project._id,
+        amount: pct(netProfit, s.sharePercent),
+        sharePercent: s.sharePercent,
+        platformFeePercent: feePct,
+        grossProfit: round(grossProfit),
+        netProfit,
+        status: 'pending',
+        runId: run._id,
+        periodStart,
+        periodEnd,
+        timestamp: now2
+      }));
+      created = await Distribution.insertMany(docs, { session });
+    });
+  } catch (e) {
+    if (e?.code === 11000) {
+      return res.status(409).json({
+        error: 'Distributions have already been generated for this project and period.'
+      });
+    }
+    throw e;
+  } finally {
+    await session.endSession();
+  }
 
   const enriched = await Promise.all(created.map(enrichDistribution));
 
@@ -176,7 +234,10 @@ r.post('/generate', requireRole('admin'), idempotent('POST /api/distributions/ge
         sharePercent: dist.sharePercent,
         grossProfit: round(grossProfit),
         netProfit,
-        platformFee
+        platformFee,
+        runId: run._id,
+        periodStart: periodStart.toISOString(),
+        periodEnd: periodEnd.toISOString()
       }
     });
   });
@@ -184,6 +245,9 @@ r.post('/generate', requireRole('admin'), idempotent('POST /api/distributions/ge
   res.status(201).json({
     projectId: project._id,
     projectName: project.name,
+    runId: run._id,
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
     grossProfit: round(grossProfit),
     platformFee,
     netProfit,
@@ -194,7 +258,7 @@ r.post('/generate', requireRole('admin'), idempotent('POST /api/distributions/ge
 // Pay a distribution: real Stellar testnet transfer treasury → investor wallet.
 // Idempotent (Idempotency-Key) and guarded by the persisted `paid` status so a
 // retry can never double-pay an investor.
-r.post('/:id/mark-paid', requireRole('admin'), idempotent('POST /api/distributions/:id/mark-paid'), asyncH(async (req, res) => {
+r.post('/:id/mark-paid', requireRole('admin'), moneyLimiter, idempotent('POST /api/distributions/:id/mark-paid'), asyncH(async (req, res) => {
   const dist = await Distribution.findById(req.params.id);
   if (!dist) return res.status(404).json({ error: 'distribution not found' });
 

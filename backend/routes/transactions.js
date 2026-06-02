@@ -9,24 +9,39 @@ import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
 import { idempotent } from '../middleware/idempotency.js';
+import { moneyLimiter } from '../middleware/rateLimit.js';
+import { paginate, listResponse } from '../services/pagination.js';
+import { amount, id } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
 r.use(requireRole('admin'));
 
+// Newest-first transaction ledger. Backward compatible: with no `page`/`limit`
+// query it returns the full array (existing consumers); when paginated it
+// returns a `{ data, pagination }` envelope.
 r.get('/', asyncH(async (req, res) => {
-  const txs = await Transaction.find().sort({ timestamp: -1 });
-  res.json(txs.map(t => t.toJSON()));
+  const pg = paginate(req.query);
+  const filter = {};
+  if (req.query.stage && req.query.stage !== 'all') filter.stage = req.query.stage;
+  if (!pg) {
+    const txs = await Transaction.find(filter).sort({ timestamp: -1 });
+    return res.json(txs.map(t => t.toJSON()));
+  }
+  const [txs, total] = await Promise.all([
+    Transaction.find(filter).sort({ timestamp: -1 }).skip(pg.skip).limit(pg.limit),
+    Transaction.countDocuments(filter)
+  ]);
+  res.json(listResponse(txs.map(t => t.toJSON()), total, pg));
 }));
 
 // Investor → Treasury: real Stellar testnet payment.
 // Idempotent (Idempotency-Key) so a double-submit can't transfer twice; a
 // pending ledger row is written BEFORE the transfer so a mid-flight crash is
 // auditable/reconcilable instead of moving funds with no record.
-r.post('/invest', idempotent('POST /api/transactions/invest'), asyncH(async (req, res) => {
-  const { investorId, amount } = req.body || {};
-  const value = Number(amount);
-  if (!value || value <= 0) return res.status(400).json({ error: 'amount > 0 required' });
+r.post('/invest', moneyLimiter, idempotent('POST /api/transactions/invest'), asyncH(async (req, res) => {
+  const investorId = id(req.body?.investorId, 'investorId');
+  const value = amount(req.body?.amount);
 
   const investor = await Investor.findById(investorId);
   if (!investor) return res.status(404).json({ error: 'investor not found' });
@@ -121,10 +136,9 @@ r.post('/invest', idempotent('POST /api/transactions/invest'), asyncH(async (req
 
 // Treasury → Project allocation. Projects don't have on-chain wallets in this
 // app — allocations are internal book-keeping against treasury balance.
-r.post('/allocate', idempotent('POST /api/transactions/allocate'), asyncH(async (req, res) => {
-  const { projectId, amount } = req.body || {};
-  const value = Number(amount);
-  if (!value || value <= 0) return res.status(400).json({ error: 'amount > 0 required' });
+r.post('/allocate', moneyLimiter, idempotent('POST /api/transactions/allocate'), asyncH(async (req, res) => {
+  const projectId = id(req.body?.projectId, 'projectId');
+  const value = amount(req.body?.amount);
 
   const project = await Project.findById(projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });

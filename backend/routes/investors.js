@@ -9,18 +9,29 @@ import { getTreasury } from '../config/seed.js';
 import { asyncH } from './_async.js';
 import { requireRole, requireSelfOrAdmin } from '../middleware/auth.js';
 import { idempotent } from '../middleware/idempotency.js';
+import { moneyLimiter } from '../middleware/rateLimit.js';
+import { paginate, listResponse } from '../services/pagination.js';
+import { amount } from '../services/validate.js';
 import { round, sum } from '../services/money.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
 
-// List + create are admin-only.
+// List + create are admin-only. Opt-in pagination (see services/pagination.js):
+// full array by default, `{ data, pagination }` when page/limit is supplied.
 r.get('/', requireRole('admin'), asyncH(async (req, res) => {
-  const investors = await Investor.find().sort({ createdAt: 1 });
+  const pg = paginate(req.query);
+  const query = Investor.find().sort({ createdAt: 1 });
+  if (pg) query.skip(pg.skip).limit(pg.limit);
+  const [investors, total] = await Promise.all([
+    query,
+    pg ? Investor.countDocuments() : Promise.resolve(0)
+  ]);
   const walletIds = investors.map(i => i.walletId);
   const wallets = await Wallet.find({ _id: { $in: walletIds } });
   const walletById = new Map(wallets.map(w => [w._id, w.toJSON()]));
-  res.json(investors.map(inv => ({ ...inv.toJSON(), wallet: walletById.get(inv.walletId) || null })));
+  const rows = investors.map(inv => ({ ...inv.toJSON(), wallet: walletById.get(inv.walletId) || null }));
+  res.json(pg ? listResponse(rows, total, pg) : rows);
 }));
 
 r.post('/', requireRole('admin'), asyncH(async (req, res) => {
@@ -145,11 +156,10 @@ r.get('/:id/summary', requireSelfOrAdmin(req => req.params.id), asyncH(async (re
 
 // Top up an investor wallet by sending real XLM from the treasury on testnet.
 // Records a Transaction with the real ledger hash + status.
-r.post('/:id/fund', requireRole('admin'), idempotent('POST /api/investors/:id/fund'), asyncH(async (req, res) => {
+r.post('/:id/fund', requireRole('admin'), moneyLimiter, idempotent('POST /api/investors/:id/fund'), asyncH(async (req, res) => {
   const investor = await Investor.findById(req.params.id);
   if (!investor) return res.status(404).json({ error: 'investor not found' });
-  const amount = Number(req.body?.amount);
-  if (!amount || amount <= 0) return res.status(400).json({ error: 'amount > 0 required' });
+  const amountValue = amount(req.body?.amount);
 
   const investorWallet = await Wallet.findById(investor.walletId);
   const treasury = await getTreasury();
@@ -161,7 +171,7 @@ r.post('/:id/fund', requireRole('admin'), idempotent('POST /api/investors/:id/fu
   // is auditable instead of an untracked treasury → investor transfer.
   const tx = await Transaction.create({
     stage: 'investment', // closest existing bucket; treasury → investor top-up
-    amount,
+    amount: amountValue,
     asset: ASSET,
     senderId: treasury._id,
     senderLabel: treasury.label,
@@ -178,7 +188,7 @@ r.post('/:id/fund', requireRole('admin'), idempotent('POST /api/investors/:id/fu
     result = await transferXLM({
       fromSecret: treasury.decryptSecret(),
       toPublicKey: investorWallet.publicKey,
-      amount
+      amount: amountValue
     });
   } catch (e) {
     tx.status = 'failed';
@@ -195,7 +205,7 @@ r.post('/:id/fund', requireRole('admin'), idempotent('POST /api/investors/:id/fu
       description: `Failed to fund investor wallet - ${e.message}`,
       status: ActivityStatus.FAILED,
       metadata: {
-        amount,
+        amount: amountValue,
         error: e.message
       }
     });
@@ -226,11 +236,11 @@ r.post('/:id/fund', requireRole('admin'), idempotent('POST /api/investors/:id/fu
     actionType: ActivityTypes.FUND_WALLET,
     entityType: EntityTypes.WALLET,
     entityId: investorWallet._id.toString(),
-    description: `Funded investor wallet with ${amount} XLM`,
+    description: `Funded investor wallet with ${amountValue} XLM`,
     txHash: result.txHash,
     status: ActivityStatus.SUCCESS,
     metadata: {
-      amount,
+      amount: amountValue,
       investorId: investor._id.toString(),
       investorName: investor.name,
       newBalance: investorWallet.balance

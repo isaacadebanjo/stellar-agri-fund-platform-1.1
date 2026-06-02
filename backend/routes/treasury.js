@@ -33,15 +33,14 @@ r.get('/overview', asyncH(async (req, res) => {
   const overview = await getTreasuryOverview();
   
   // Log treasury report view (optional - for audit trail)
-  setImmediate(() => {
-    logActivity({
-      user: req.user,
-      actionType: ActivityTypes.VIEW_TREASURY_REPORT,
-      entityType: EntityTypes.REPORT,
-      entityId: 'treasury-overview',
-      description: 'Viewed treasury overview dashboard',
-      status: ActivityStatus.SUCCESS
-    });
+  logActivity({
+    userId: req.user?.id,
+    userRole: req.user?.role || 'system',
+    actionType: ActivityTypes.VIEW_TREASURY_REPORT,
+    entityType: EntityTypes.REPORT,
+    entityId: 'treasury-overview',
+    description: 'Viewed treasury overview dashboard',
+    status: ActivityStatus.SUCCESS
   });
 
   res.json(overview);

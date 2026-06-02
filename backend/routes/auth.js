@@ -5,7 +5,9 @@ import rateLimit from 'express-rate-limit';
 import User from '../models/User.js';
 import Investor from '../models/Investor.js';
 import { signToken, requireAuth, revokeToken } from '../middleware/auth.js';
+import { walletAuthLimiter } from '../middleware/rateLimit.js';
 import { isWalletAuthEnabled, buildChallenge, verifyChallenge, WALLET_NETWORK } from '../services/sep10.js';
+import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 import { asyncH } from './_async.js';
 
 const r = Router();
@@ -50,6 +52,18 @@ r.post('/login', loginLimiter, asyncH(async (req, res) => {
   if (!user || !ok) return res.status(401).json(BAD_CREDS);
 
   const token = signToken(user);
+
+  logActivity({
+    userId: user._id.toString(),
+    userRole: user.role,
+    actionType: ActivityTypes.LOGIN,
+    entityType: EntityTypes.SYSTEM,
+    entityId: user._id.toString(),
+    description: `User ${user.email} logged in`,
+    status: ActivityStatus.SUCCESS,
+    metadata: { email: user.email, authType: 'password' }
+  });
+
   res.json({ token, user: authUser(user) });
 }));
 
@@ -68,7 +82,7 @@ r.get('/me', requireAuth, asyncH(async (req, res) => {
 
 // Step 1: hand the wallet a challenge transaction to sign. `account` is the
 // connected Stellar public key (G...).
-r.get('/wallet/challenge', asyncH(async (req, res) => {
+r.get('/wallet/challenge', walletAuthLimiter, asyncH(async (req, res) => {
   if (!isWalletAuthEnabled()) {
     return res.status(503).json({ error: 'Wallet login is not enabled on this server.' });
   }
@@ -86,7 +100,7 @@ r.get('/wallet/challenge', asyncH(async (req, res) => {
 
 // Step 2: verify the signed challenge, then find-or-create the investor + a
 // linked investor user, and issue the same JWT the password flow returns.
-r.post('/wallet/verify', loginLimiter, asyncH(async (req, res) => {
+r.post('/wallet/verify', walletAuthLimiter, asyncH(async (req, res) => {
   if (!isWalletAuthEnabled()) {
     return res.status(503).json({ error: 'Wallet login is not enabled on this server.' });
   }
@@ -126,6 +140,18 @@ r.post('/wallet/verify', loginLimiter, asyncH(async (req, res) => {
   }
 
   const token = signToken(user);
+
+  logActivity({
+    userId: user._id.toString(),
+    userRole: user.role,
+    actionType: ActivityTypes.LOGIN,
+    entityType: EntityTypes.SYSTEM,
+    entityId: user._id.toString(),
+    description: `Wallet ${publicKey.slice(0, 4)}…${publicKey.slice(-4)} logged in`,
+    status: ActivityStatus.SUCCESS,
+    metadata: { authType: 'wallet', stellarPublicKey: publicKey }
+  });
+
   res.json({ token, user: authUser(user) });
 }));
 
@@ -146,6 +172,17 @@ r.post('/refresh', requireAuth, asyncH(async (req, res) => {
 // can't keep being used until natural expiry.
 r.post('/logout', requireAuth, asyncH(async (req, res) => {
   await revokeToken(req.user);
+
+  logActivity({
+    userId: req.user.id,
+    userRole: req.user.role,
+    actionType: ActivityTypes.LOGOUT,
+    entityType: EntityTypes.SYSTEM,
+    entityId: req.user.id,
+    description: 'User logged out',
+    status: ActivityStatus.SUCCESS
+  });
+
   res.json({ ok: true });
 }));
 

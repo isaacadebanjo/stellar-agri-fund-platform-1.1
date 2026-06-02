@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api } from '../api.js';
 import { Section, Button, TableWrap, Select, Empty } from './ui.jsx';
 
 const STELLAR_EXPERT_TESTNET = 'https://stellar.expert/explorer/testnet/tx';
@@ -17,22 +18,7 @@ export default function TreasuryTransactions({ loading }) {
     const fetchTransactions = async () => {
       try {
         setTxLoading(true);
-        const params = new URLSearchParams({
-          page,
-          limit,
-          ...(status && { status }),
-          ...(type && { type })
-        });
-
-        const response = await fetch(`/api/treasury/transactions?${params}`, {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('agri_token')}`
-          }
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch transactions');
-        const data = await response.json();
-
+        const data = await api.treasury.transactions({ page, limit, status, type });
         setTransactions(data.transactions || []);
         setTotal(data.pagination?.total || 0);
         setPages(data.pagination?.pages || 1);

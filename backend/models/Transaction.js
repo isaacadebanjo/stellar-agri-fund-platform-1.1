@@ -27,4 +27,9 @@ const TransactionSchema = new mongoose.Schema({
   if (ret.timestamp instanceof Date) ret.timestamp = ret.timestamp.toISOString();
 }));
 
+// Newest-first listing and the treasury filters (by stage/status) are the hot
+// paths; a compound index covers the filtered, sorted, paginated queries.
+TransactionSchema.index({ timestamp: -1 });
+TransactionSchema.index({ stage: 1, status: 1, timestamp: -1 });
+
 export default mongoose.model('Transaction', TransactionSchema);

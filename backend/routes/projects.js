@@ -3,6 +3,8 @@ import Project from '../models/Project.js';
 import Revenue from '../models/Revenue.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { round, sub } from '../services/money.js';
+import { nonEmptyString, optionalIsoDate } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
@@ -12,7 +14,6 @@ const r = Router();
 r.use(requireRole('admin'));
 
 function enrich(p, revenue) {
-  const profit = revenue - p.spent;
   return {
     id: p._id,
     name: p.name,
@@ -25,9 +26,9 @@ function enrich(p, revenue) {
     spent: p.spent,
     createdAt: p.createdAt,
     paidOut: p.spent,
-    remaining: +(p.allocated - p.spent).toFixed(2),
-    revenue: +revenue.toFixed(2),
-    profit: +profit.toFixed(2)
+    remaining: sub(p.allocated, p.spent),
+    revenue: round(revenue),
+    profit: sub(revenue, p.spent)
   };
 }
 
@@ -45,8 +46,11 @@ r.get('/', asyncH(async (req, res) => {
 }));
 
 r.post('/', asyncH(async (req, res) => {
-  const { name, description, cropType, status, startDate, endDate } = req.body || {};
-  if (!name) return res.status(400).json({ error: 'name required' });
+  const { description, cropType, status, startDate, endDate } = req.body || {};
+  const name = nonEmptyString(req.body?.name, 'name');
+  // Validate dates if provided; stored as the original ISO date strings.
+  optionalIsoDate(startDate, 'startDate');
+  optionalIsoDate(endDate, 'endDate');
   const project = await Project.create({
     name,
     description: description || '',
@@ -82,6 +86,8 @@ r.patch('/:id', asyncH(async (req, res) => {
   for (const k of allowed) {
     if (req.body && req.body[k] !== undefined) update[k] = req.body[k];
   }
+  if (update.startDate !== undefined) optionalIsoDate(update.startDate, 'startDate');
+  if (update.endDate !== undefined) optionalIsoDate(update.endDate, 'endDate');
   const project = await Project.findByIdAndUpdate(req.params.id, update, {
     new: true,
     runValidators: true

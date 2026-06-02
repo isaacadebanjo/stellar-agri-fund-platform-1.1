@@ -11,6 +11,7 @@ import { validateEnv } from './config/env.js';
 import { connectDB } from './config/db.js';
 import { seedIfNeeded } from './config/seed.js';
 import { requireAuth } from './middleware/auth.js';
+import { requestId } from './middleware/requestId.js';
 import auth from './routes/auth.js';
 import investors from './routes/investors.js';
 import projects from './routes/projects.js';
@@ -34,8 +35,19 @@ app.set('trust proxy', 1);
 // Baseline security headers.
 app.use(helmet());
 
-// Request logging.
-app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+// Correlation id on every request (req.id + X-Request-Id response header),
+// attached before logging so it appears in the access log line.
+app.use(requestId);
+
+// Request logging, with the request id included for log correlation.
+morgan.token('id', req => req.id);
+app.use(
+  morgan(
+    process.env.NODE_ENV === 'production'
+      ? ':id :remote-addr :method :url :status :res[content-length] - :response-time ms'
+      : ':id :method :url :status :response-time ms'
+  )
+);
 
 // CORS allowlist. Set CORS_ORIGIN to a comma-separated list of allowed
 // frontend origins (e.g. "https://agri-funds.vercel.app"). Requests with no
@@ -101,7 +113,12 @@ app.use('/api/treasury', treasury);
 // Central error handler — catches anything thrown from asyncH-wrapped routes.
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
-  console.error('API error:', err);
+  console.error(`API error [${req.id}]:`, err);
+  // Explicit client errors (e.g. BadRequest from services/validate.js) carry
+  // their own status; honor it instead of masking as a 500.
+  if (err.httpStatus) {
+    return res.status(err.httpStatus).json({ error: err.message });
+  }
   if (err.name === 'ValidationError') {
     return res.status(400).json({ error: err.message });
   }

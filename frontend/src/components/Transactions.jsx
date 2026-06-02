@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { Section, Badge, TableWrap, Empty, ErrorBanner, Money } from './ui.jsx';
+import { Section, Button, Badge, TableWrap, Empty, ErrorBanner, Money } from './ui.jsx';
 
 const FILTERS = ['all', 'investment', 'allocation', 'payout'];
+const PAGE_SIZE = 20;
 
 // Stellar Expert is the standard public block explorer for Stellar.
 // Real testnet txs (network='stellar-testnet') get a clickable link;
@@ -12,24 +13,38 @@ const explorerUrl = (hash) => `https://stellar.expert/explorer/testnet/tx/${hash
 export default function Transactions({ refreshKey }) {
   const [txs, setTxs] = useState([]);
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState({ total: 0, pages: 1 });
   const [err, setErr] = useState('');
 
+  // Server-side pagination + stage filtering (passing page/limit makes the API
+  // return a { data, pagination } envelope instead of the full array).
   useEffect(() => {
-    api.transactions.list().then(setTxs).catch(e => setErr(e.message));
-  }, [refreshKey]);
+    api.transactions
+      .list({ page, limit: PAGE_SIZE, stage: filter })
+      .then(res => {
+        setTxs(res.data || []);
+        setPagination(res.pagination || { total: 0, pages: 1 });
+        setErr('');
+      })
+      .catch(e => setErr(e.message));
+  }, [refreshKey, page, filter]);
 
-  const filtered = filter === 'all' ? txs : txs.filter(t => t.stage === filter);
+  function changeFilter(f) {
+    setFilter(f);
+    setPage(1);
+  }
 
   return (
     <Section
       title="Transaction Ledger"
-      subtitle={`${filtered.length} of ${txs.length} entries · real testnet payments + internal book-keeping`}
+      subtitle={`${pagination.total} entries · real testnet payments + internal book-keeping`}
       action={
         <div className="inline-flex items-center rounded-lg bg-slate-100 p-0.5">
           {FILTERS.map(f => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => changeFilter(f)}
               className={
                 'px-3 py-1 text-xs font-medium rounded-md transition-colors ' +
                 (filter === f
@@ -44,7 +59,7 @@ export default function Transactions({ refreshKey }) {
       }
     >
       <ErrorBanner>{err}</ErrorBanner>
-      {filtered.length === 0 ? (
+      {txs.length === 0 ? (
         <Empty>No transactions.</Empty>
       ) : (
         <TableWrap>
@@ -61,7 +76,7 @@ export default function Transactions({ refreshKey }) {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(t => {
+              {txs.map(t => {
                 const onChain = t.network === 'stellar-testnet' && t.txHash;
                 return (
                   <tr key={t.id}>
@@ -92,6 +107,22 @@ export default function Transactions({ refreshKey }) {
             </tbody>
           </table>
         </TableWrap>
+      )}
+
+      {pagination.pages > 1 && (
+        <div className="mt-4 flex items-center justify-between">
+          <div className="text-sm text-slate-500">
+            Page {page} of {pagination.pages} · {pagination.total} total
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+              ← Previous
+            </Button>
+            <Button variant="ghost" disabled={page >= pagination.pages} onClick={() => setPage(p => Math.min(pagination.pages, p + 1))}>
+              Next →
+            </Button>
+          </div>
+        </div>
       )}
     </Section>
   );

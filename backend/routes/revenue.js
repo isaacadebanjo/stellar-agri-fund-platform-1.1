@@ -3,6 +3,7 @@ import Revenue from '../models/Revenue.js';
 import Project from '../models/Project.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { amount, id } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
@@ -23,16 +24,16 @@ r.get('/', asyncH(async (req, res) => {
 }));
 
 r.post('/', asyncH(async (req, res) => {
-  const { projectId, amount, source } = req.body || {};
-  const value = Number(amount);
-  if (!value || value <= 0) return res.status(400).json({ error: 'amount > 0 required' });
+  const projectId = id(req.body?.projectId, 'projectId');
+  const value = amount(req.body?.amount);
+  const source = typeof req.body?.source === 'string' ? req.body.source.trim() : '';
   const project = await Project.findById(projectId);
   if (!project) return res.status(404).json({ error: 'project not found' });
 
   const record = await Revenue.create({
     projectId,
     amount: value,
-    source: (source || '').trim()
+    source
   });
 
   logActivity({

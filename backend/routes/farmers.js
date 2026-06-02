@@ -4,6 +4,7 @@ import Project from '../models/Project.js';
 import Payout from '../models/Payout.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { sum } from '../services/money.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
@@ -11,7 +12,7 @@ r.use(requireRole('admin'));
 
 async function enrich(farmer, payouts, projectsById) {
   const farmerPayouts = payouts.filter(p => p.farmerId === farmer._id);
-  const totalReceived = farmerPayouts.reduce((s, p) => s + p.amount, 0);
+  const totalReceived = sum(farmerPayouts, p => p.amount);
   const projectIds = Array.from(new Set([
     ...(farmer.assignedProjects || []),
     ...farmerPayouts.map(p => p.projectId)
@@ -26,7 +27,7 @@ async function enrich(farmer, payouts, projectsById) {
     walletId: farmer.walletId || '',
     assignedProjects: farmer.assignedProjects || [],
     createdAt: farmer.createdAt,
-    totalReceived: +totalReceived.toFixed(2),
+    totalReceived,
     payoutCount: farmerPayouts.length,
     projects
   };

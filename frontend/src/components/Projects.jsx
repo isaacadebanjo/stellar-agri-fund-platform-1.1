@@ -4,6 +4,7 @@ import {
   Section, StatCard, Cards, Button, Input, Select, Field,
   TableWrap, Empty, ErrorBanner, Money, fmt
 } from './ui.jsx';
+import AmountModal from './AmountModal.jsx';
 
 const STATUSES = ['active', 'paused', 'completed', 'cancelled'];
 
@@ -13,6 +14,8 @@ export default function Projects({ refreshKey, onChange }) {
     name: '', description: '', cropType: '', status: 'active', startDate: '', endDate: ''
   });
   const [err, setErr] = useState('');
+  // The project currently being allocated to — drives the amount-entry modal.
+  const [allocateProject, setAllocateProject] = useState(null);
 
   const load = () => api.projects.list().then(setProjects).catch(e => setErr(e.message));
   useEffect(() => { load(); }, [refreshKey]);
@@ -35,20 +38,17 @@ export default function Projects({ refreshKey, onChange }) {
     } catch (e) { setErr(e.message); }
   }
 
-  async function allocate(id) {
-    const amount = prompt('Allocate how much XLM from treasury (internal book-keeping)?');
-    if (!amount) return;
-    try {
-      await api.transactions.allocate(id, Number(amount));
-      await load(); onChange?.();
-    } catch (e) { alert(e.message); }
+  async function confirmAllocate(amount) {
+    await api.transactions.allocate(allocateProject.id, amount);
+    await load(); onChange?.();
   }
 
   async function changeStatus(id, status) {
     try {
       await api.projects.update(id, { status });
+      setErr('');
       await load(); onChange?.();
-    } catch (e) { alert(e.message); }
+    } catch (e) { setErr(e.message); }
   }
 
   const totals = projects.reduce((acc, p) => ({
@@ -146,7 +146,7 @@ export default function Projects({ refreshKey, onChange }) {
                       <Money value={p.profit ?? 0} signed />
                     </td>
                     <td className="text-right">
-                      <Button onClick={() => allocate(p.id)}>Allocate</Button>
+                      <Button onClick={() => setAllocateProject(p)}>Allocate</Button>
                     </td>
                   </tr>
                 ))}
@@ -155,6 +155,16 @@ export default function Projects({ refreshKey, onChange }) {
           </TableWrap>
         )}
       </Section>
+
+      <AmountModal
+        open={!!allocateProject}
+        title="Allocate to project"
+        subtitle={`Allocate XLM from the treasury to "${allocateProject?.name}" (internal book-keeping). Remaining: ${fmt(allocateProject?.remaining ?? 0)}.`}
+        label="Amount to allocate (XLM)"
+        confirmLabel="Allocate"
+        onConfirm={confirmAllocate}
+        onClose={() => setAllocateProject(null)}
+      />
     </>
   );
 }

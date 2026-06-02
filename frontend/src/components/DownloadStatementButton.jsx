@@ -10,22 +10,10 @@ export default function DownloadStatementButton({ investorId, investorName = 'In
       setLoading(true);
       setError(null);
 
-      const response = await fetch(
-        `/api/statements/${investorId}/pdf`,
-        {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('agri_token')}`
-          }
-        }
-      );
+      // Routed through api.js so it uses VITE_API_BASE_URL and the shared 401
+      // handling, consistent with every other API call.
+      const blob = await api.statements.downloadPdf(investorId);
 
-      if (!response.ok) {
-        throw new Error('Failed to download statement');
-      }
-
-      // Create blob and trigger download
-      const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;

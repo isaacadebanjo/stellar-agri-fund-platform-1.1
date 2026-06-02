@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import {
   Section, Button, Input, TableWrap, Empty, ErrorBanner, Money, fmt
 } from './ui.jsx';
+import AmountModal from './AmountModal.jsx';
 import DownloadStatementButton from './DownloadStatementButton.jsx';
 
 export default function Investors({ refreshKey, onChange }) {
@@ -11,6 +12,8 @@ export default function Investors({ refreshKey, onChange }) {
   const [email, setEmail] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  // { kind: 'fund' | 'invest', investor } — drives the amount-entry modal.
+  const [modal, setModal] = useState(null);
 
   const load = () => api.investors.list().then(setInvestors).catch(e => setErr(e.message));
   useEffect(() => { load(); }, [refreshKey]);
@@ -27,22 +30,13 @@ export default function Investors({ refreshKey, onChange }) {
     setBusy(false);
   }
 
-  async function fund(id) {
-    const amount = prompt('Top up wallet by how much XLM (sent from treasury via testnet)?');
-    if (!amount) return;
-    try {
-      await api.investors.fund(id, Number(amount));
-      await load(); onChange?.();
-    } catch (e) { alert(e.message); }
-  }
-
-  async function invest(id, available) {
-    const amount = prompt(`Invest into treasury — available ${fmt(available)}:`);
-    if (!amount) return;
-    try {
-      await api.transactions.invest(id, Number(amount));
-      await load(); onChange?.();
-    } catch (e) { alert(e.message); }
+  async function confirmModal(amount) {
+    if (modal.kind === 'fund') {
+      await api.investors.fund(modal.investor.id, amount);
+    } else {
+      await api.transactions.invest(modal.investor.id, amount);
+    }
+    await load(); onChange?.();
   }
 
   return (
@@ -83,8 +77,8 @@ export default function Investors({ refreshKey, onChange }) {
                     <td className="text-right">
                       <div className="inline-flex items-center gap-2">
                         <DownloadStatementButton investorId={inv.id} investorName={inv.name} />
-                        <Button variant="ghost" onClick={() => fund(inv.id)}>Fund</Button>
-                        <Button onClick={() => invest(inv.id, inv.wallet?.balance ?? 0)}>Invest →</Button>
+                        <Button variant="ghost" onClick={() => setModal({ kind: 'fund', investor: inv })}>Fund</Button>
+                        <Button onClick={() => setModal({ kind: 'invest', investor: inv })}>Invest →</Button>
                       </div>
                     </td>
                   </tr>
@@ -94,6 +88,19 @@ export default function Investors({ refreshKey, onChange }) {
           </TableWrap>
         )}
       </Section>
+
+      <AmountModal
+        open={!!modal}
+        title={modal?.kind === 'fund' ? 'Fund investor wallet' : 'Invest into treasury'}
+        subtitle={
+          modal?.kind === 'fund'
+            ? `Top up ${modal?.investor?.name}'s wallet from the treasury (testnet).`
+            : `Invest from ${modal?.investor?.name}'s wallet — available ${fmt(modal?.investor?.wallet?.balance ?? 0)}.`
+        }
+        confirmLabel={modal?.kind === 'fund' ? 'Fund wallet' : 'Invest'}
+        onConfirm={confirmModal}
+        onClose={() => setModal(null)}
+      />
     </>
   );
 }

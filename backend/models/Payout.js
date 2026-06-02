@@ -17,4 +17,7 @@ const PayoutSchema = new mongoose.Schema({
   if (ret.timestamp instanceof Date) ret.timestamp = ret.timestamp.toISOString();
 }));
 
+// Payouts are listed newest-first.
+PayoutSchema.index({ timestamp: -1 });
+
 export default mongoose.model('Payout', PayoutSchema);
