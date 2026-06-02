@@ -29,7 +29,10 @@ export const ActivityTypes = {
   RECORD_DELIVERY: 'RECORD_DELIVERY',
   UPDATE_DELIVERY: 'UPDATE_DELIVERY',
   CREATE_INVOICE: 'CREATE_INVOICE',
-  RECORD_PAYMENT: 'RECORD_PAYMENT'
+  RECORD_PAYMENT: 'RECORD_PAYMENT',
+  // Institutional Readiness — Analytics (Phase 2).
+  RECORD_YIELD: 'RECORD_YIELD',
+  UPDATE_YIELD: 'UPDATE_YIELD'
 };
 
 // Entity types
@@ -47,7 +50,8 @@ export const EntityTypes = {
   BUYER: 'BUYER',
   OFFTAKE: 'OFFTAKE',
   DELIVERY: 'DELIVERY',
-  INVOICE: 'INVOICE'
+  INVOICE: 'INVOICE',
+  YIELD: 'YIELD'
 };
 
 // Status enum

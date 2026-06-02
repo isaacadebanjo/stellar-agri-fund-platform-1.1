@@ -30,6 +30,9 @@ import buyers from './routes/buyers.js';
 import offtake from './routes/offtake.js';
 import deliveries from './routes/deliveries.js';
 import invoices from './routes/invoices.js';
+import yields from './routes/yields.js';
+import kpi from './routes/kpi.js';
+import investorConfidence from './routes/investorConfidence.js';
 
 const app = express();
 
@@ -117,6 +120,9 @@ app.use('/api/buyers', buyers);
 app.use('/api/offtake', offtake);
 app.use('/api/deliveries', deliveries);
 app.use('/api/invoices', invoices);
+app.use('/api/yields', yields);
+app.use('/api/kpi', kpi);
+app.use('/api/investor-confidence', investorConfidence);
 
 // Central error handler — catches anything thrown from asyncH-wrapped routes.
 // eslint-disable-next-line no-unused-vars

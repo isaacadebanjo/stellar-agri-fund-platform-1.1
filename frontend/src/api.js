@@ -148,6 +148,15 @@ export const api = {
     create: (data) => request('POST', '/api/invoices', data),
     update: (id, data) => request('PATCH', `/api/invoices/${id}`, data)
   },
+  // --- Institutional Readiness: Analytics (Phase 2) ---
+  yields: {
+    list: (params) => request('GET', '/api/yields' + qs(params)),
+    summary: () => request('GET', '/api/yields/summary'),
+    create: (data) => request('POST', '/api/yields', data),
+    update: (id, data) => request('PATCH', `/api/yields/${id}`, data)
+  },
+  kpi: () => request('GET', '/api/kpi/overview'),
+  investorConfidence: () => request('GET', '/api/investor-confidence'),
   revenue: {
     list: (projectId) => request('GET', '/api/revenue' + (projectId ? `?projectId=${projectId}` : '')),
     create: (data) => request('POST', '/api/revenue', data)

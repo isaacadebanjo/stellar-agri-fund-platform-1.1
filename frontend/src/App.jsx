@@ -15,6 +15,9 @@ import Buyers from './components/Buyers.jsx';
 import Offtake from './components/Offtake.jsx';
 import Deliveries from './components/Deliveries.jsx';
 import Payments from './components/Payments.jsx';
+import KpiDashboard from './components/KpiDashboard.jsx';
+import Yields from './components/Yields.jsx';
+import InvestorConfidence from './components/InvestorConfidence.jsx';
 import Login from './components/Login.jsx';
 import InstallPrompt from './components/InstallPrompt.jsx';
 import { WalletBadge } from './components/ConnectWallet.jsx';
@@ -37,7 +40,8 @@ const NAV = [
     items: [
       { id: 'dashboard',          label: 'Dashboard',     subtitle: 'Treasury, totals, profit trend',   icon: IconHome,  roles: ['admin'] },
       { id: 'treasury',           label: 'Treasury',      subtitle: 'Capital flows and liquidity',      icon: IconVault, roles: ['admin'] },
-      { id: 'investor-dashboard', label: 'Investor View', subtitle: 'Per-investor portfolio summary',   icon: IconUser,  roles: ['admin', 'investor'] }
+      { id: 'investor-dashboard', label: 'Investor View', subtitle: 'Per-investor portfolio summary',   icon: IconUser,  roles: ['admin', 'investor'] },
+      { id: 'investor-confidence', label: 'Investor Confidence', subtitle: 'Institutional-readiness signals', icon: IconReport, roles: ['admin', 'investor'] }
     ]
   },
   {
@@ -62,6 +66,8 @@ const NAV = [
   {
     section: 'Insights',
     items: [
+      { id: 'kpi',           label: 'KPI Dashboard', subtitle: 'Operational & per-hectare metrics',   icon: IconHome,   roles: ['admin'] },
+      { id: 'yields',        label: 'Yield Reporting', subtitle: 'Expected vs actual crop yields',     icon: IconLeaf,   roles: ['admin'] },
       { id: 'transactions',  label: 'Transactions',  subtitle: 'Unified ledger of all flows',         icon: IconList,   roles: ['admin'] },
       { id: 'distributions', label: 'Distributions', subtitle: 'Profit splits to investors',          icon: IconShare,  roles: ['admin'] },
       { id: 'activity',      label: 'Activity Log',  subtitle: 'Audit trail of all actions',         icon: IconAudit,  roles: ['admin'] },
@@ -74,7 +80,8 @@ const INVESTOR_NAV = [
   {
     section: 'Portfolio',
     items: [
-      { id: 'investor-dashboard', label: 'My Portfolio', subtitle: 'Your investments, returns, and projects', icon: IconUser, roles: ['investor'] }
+      { id: 'investor-dashboard', label: 'My Portfolio', subtitle: 'Your investments, returns, and projects', icon: IconUser, roles: ['investor'] },
+      { id: 'investor-confidence', label: 'Investor Confidence', subtitle: 'Institutional-readiness signals', icon: IconReport, roles: ['investor'] }
     ]
   }
 ];
@@ -248,10 +255,13 @@ function Shell({ user, logout }) {
           {tab === 'offtake'        && isAdmin && <Offtake refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'deliveries'     && isAdmin && <Deliveries refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'payments'       && isAdmin && <Payments refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'kpi'            && isAdmin && <KpiDashboard refreshKey={refreshKey} />}
+          {tab === 'yields'         && isAdmin && <Yields refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'distributions'  && isAdmin && <Distributions refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'activity'       && isAdmin && <Activity refreshKey={refreshKey} />}
           {tab === 'reports'        && isAdmin && <Reports refreshKey={refreshKey} />}
           {/* Shared */}
+          {tab === 'investor-confidence' && <InvestorConfidence refreshKey={refreshKey} />}
           {tab === 'investor-dashboard' && (
             <InvestorDashboard
               refreshKey={refreshKey}

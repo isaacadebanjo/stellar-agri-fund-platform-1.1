@@ -12,7 +12,9 @@ const ProjectSchema = new mongoose.Schema({
   startDate: { type: String, default: '' }, // kept as ISO date string to match prior shape
   endDate: { type: String, default: '' },
   allocated: { type: Number, default: 0, min: 0 },
-  spent: { type: Number, default: 0, min: 0 }
+  spent: { type: Number, default: 0, min: 0 },
+  // Hectares under cultivation — feeds per-hectare KPIs. Additive, defaults to 0.
+  hectares: { type: Number, default: 0, min: 0 }
 }, baseSchemaOptions());
 
 export default mongoose.model('Project', ProjectSchema);

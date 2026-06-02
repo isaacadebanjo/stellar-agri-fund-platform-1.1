@@ -11,7 +11,7 @@ const STATUSES = ['active', 'paused', 'completed', 'cancelled'];
 export default function Projects({ refreshKey, onChange }) {
   const [projects, setProjects] = useState([]);
   const [form, setForm] = useState({
-    name: '', description: '', cropType: '', status: 'active', startDate: '', endDate: ''
+    name: '', description: '', cropType: '', status: 'active', startDate: '', endDate: '', hectares: ''
   });
   const [err, setErr] = useState('');
   // The project currently being allocated to — drives the amount-entry modal.
@@ -30,9 +30,10 @@ export default function Projects({ refreshKey, onChange }) {
         cropType: form.cropType.trim(),
         status: form.status,
         startDate: form.startDate,
-        endDate: form.endDate
+        endDate: form.endDate,
+        hectares: Number(form.hectares) || 0
       });
-      setForm({ name: '', description: '', cropType: '', status: 'active', startDate: '', endDate: '' });
+      setForm({ name: '', description: '', cropType: '', status: 'active', startDate: '', endDate: '', hectares: '' });
       setErr('');
       await load(); onChange?.();
     } catch (e) { setErr(e.message); }
@@ -81,6 +82,9 @@ export default function Projects({ refreshKey, onChange }) {
             </Field>
             <Field label="End date">
               <Input type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} />
+            </Field>
+            <Field label="Hectares">
+              <Input type="number" min="0" step="0.1" placeholder="0" value={form.hectares} onChange={e => setForm({ ...form, hectares: e.target.value })} />
             </Field>
           </div>
           <div className="flex items-center justify-end">

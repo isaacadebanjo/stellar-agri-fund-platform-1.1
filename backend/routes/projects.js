@@ -4,7 +4,7 @@ import Revenue from '../models/Revenue.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
 import { round, sub } from '../services/money.js';
-import { nonEmptyString, optionalIsoDate } from '../services/validate.js';
+import { nonEmptyString, optionalIsoDate, nonNegativeNumber } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
 const r = Router();
@@ -24,6 +24,7 @@ function enrich(p, revenue) {
     endDate: p.endDate || '',
     allocated: p.allocated,
     spent: p.spent,
+    hectares: p.hectares || 0,
     createdAt: p.createdAt,
     paidOut: p.spent,
     remaining: sub(p.allocated, p.spent),
@@ -51,13 +52,15 @@ r.post('/', asyncH(async (req, res) => {
   // Validate dates if provided; stored as the original ISO date strings.
   optionalIsoDate(startDate, 'startDate');
   optionalIsoDate(endDate, 'endDate');
+  const hectares = req.body?.hectares === undefined ? 0 : nonNegativeNumber(req.body.hectares, 'hectares');
   const project = await Project.create({
     name,
     description: description || '',
     cropType: cropType || '',
     status: status || 'active',
     startDate: startDate || '',
-    endDate: endDate || ''
+    endDate: endDate || '',
+    hectares
   });
 
   // Log project creation
@@ -81,13 +84,14 @@ r.post('/', asyncH(async (req, res) => {
 
 // Update project fields (status, dates, crop, etc.)
 r.patch('/:id', asyncH(async (req, res) => {
-  const allowed = ['name', 'description', 'cropType', 'status', 'startDate', 'endDate'];
+  const allowed = ['name', 'description', 'cropType', 'status', 'startDate', 'endDate', 'hectares'];
   const update = {};
   for (const k of allowed) {
     if (req.body && req.body[k] !== undefined) update[k] = req.body[k];
   }
   if (update.startDate !== undefined) optionalIsoDate(update.startDate, 'startDate');
   if (update.endDate !== undefined) optionalIsoDate(update.endDate, 'endDate');
+  if (update.hectares !== undefined) update.hectares = nonNegativeNumber(update.hectares, 'hectares');
   const project = await Project.findByIdAndUpdate(req.params.id, update, {
     new: true,
     runValidators: true

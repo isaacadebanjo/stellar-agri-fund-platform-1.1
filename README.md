@@ -186,6 +186,11 @@ GET/POST/PATCH /api/buyers           # + /api/buyers/:id/archive, /api/buyers/su
 GET/POST/PATCH /api/offtake          # offtake agreements + /api/offtake/summary
 GET/POST/PATCH /api/deliveries       # sales & delivery + /api/deliveries/summary
 GET/POST/PATCH /api/invoices         # payment cycles + /api/invoices/summary
+
+# Institutional Readiness — Analytics (Phase 2)
+GET/POST/PATCH /api/yields           # crop yields + /api/yields/summary (efficiency, trend)
+GET /api/kpi/overview                # operational KPIs (per-hectare, margins, ROI, by-project)
+GET /api/investor-confidence         # readiness rollup (admin + investor)
 ```
 
 Write paths that move funds accept an `Idempotency-Key` header so a retried request never double-spends.
@@ -199,11 +204,17 @@ Additional API behaviors:
 
 ## Institutional Readiness module (in progress)
 
-A governance/due-diligence layer being built on top of the platform, **without touching** the Stellar/treasury/auth core. **Phase 1 (Commercial) is implemented**: off-chain business records under a new **Commercial** nav section.
+A governance/due-diligence layer being built on top of the platform, **without touching** the Stellar/treasury/auth core. **Phases 1–2 are implemented.**
 
+**Phase 1 — Commercial** (new **Commercial** nav section):
 - **Buyers** — register offtakers with verification status; summary of active/verified buyers + total contracted volume.
 - **Offtake agreements** — buyer commits to purchase a project's crop (quantity × unit price = contract value); summary of contracted revenue, contract utilization %, and remaining commitments.
 - **Sales & Delivery** — record harvest deliveries against agreements; delivered-vs-contracted, outstanding deliveries, revenue generated/collected.
 - **Payments** — invoice payment-cycle tracking with overdue alerts, average payment cycle (days), and collection rate.
 
-Phase 2 (KPI / yield / investor-confidence dashboards) and Phase 3 (governance approvals + milestone-gated capital release) are planned but not yet built.
+**Phase 2 — Analytics** (read-only; adds a `hectares` field to Projects):
+- **KPI Dashboard** — hectares under cultivation, active projects, yield/revenue/cost per hectare, gross & profit margins, investor ROI, capital utilization, plus a per-project revenue/cost/profit chart.
+- **Yield Reporting** — expected vs actual yield per growing cycle, variance, efficiency %, and a yield trend chart.
+- **Investor Confidence Dashboard** (visible to investors too) — capital deployed/remaining, contracted revenue, buyer coverage, yield performance, payment-collection rate, ROI, and a composite governance/readiness score.
+
+Phase 3 (governance approvals + milestone-gated capital release) is planned but not yet built.
