@@ -62,7 +62,7 @@ export default function Dashboard({ refreshKey }) {
                   <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
                   <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                   <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false}
-                         tickFormatter={(v) => `$${v >= 1000 ? (v/1000).toFixed(1) + 'k' : v}`} />
+                         tickFormatter={(v) => `${v >= 1000 ? (v/1000).toFixed(1) + 'k' : v} XLM`} />
                   <Tooltip formatter={(v) => fmt(v)} contentStyle={{ borderRadius: 8 }} />
                   <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                   <Line type="monotone" dataKey="cumulativeProfit" name="Cumulative profit" stroke="#047857" strokeWidth={2.5} dot={false} />
@@ -86,7 +86,7 @@ export default function Dashboard({ refreshKey }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#eef2f7" vertical={false} />
                 <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
                 <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false}
-                       tickFormatter={(v) => `$${v >= 1000 ? (v/1000).toFixed(1) + 'k' : v}`} />
+                       tickFormatter={(v) => `${v >= 1000 ? (v/1000).toFixed(1) + 'k' : v} XLM`} />
                 <Tooltip formatter={(v) => fmt(v)} cursor={{ fill: '#f1f5f9' }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
                 <Bar dataKey="revenue" name="Revenue" fill="#047857" radius={[6, 6, 0, 0]} />

@@ -23,10 +23,10 @@ export default function TreasuryOverviewCards({ data, loading }) {
   const fmt = (val) => {
     if (val === null || val === undefined) return '—';
     if (typeof val !== 'number') return String(val);
-    return new Intl.NumberFormat('en-US', {
+    return `${new Intl.NumberFormat('en-US', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    }).format(val);
+    }).format(val)} XLM`;
   };
 
   return (
@@ -34,7 +34,7 @@ export default function TreasuryOverviewCards({ data, loading }) {
       <StatCard
         label="Treasury Wallet Balance"
         value={fmt(data.treasuryBalance)}
-        sub="XLM on testnet"
+        sub="on testnet"
         accent="LIVE"
       />
       <StatCard

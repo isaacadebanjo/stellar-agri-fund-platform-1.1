@@ -1,7 +1,9 @@
 import React from 'react';
 
+// All amounts in this app are Stellar lumens (XLM), not fiat — format with an
+// "XLM" suffix rather than a "$" prefix. Used app-wide (StatCards, Money, tables).
 export const fmt = n =>
-  `$${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  `${(n ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XLM`;
 
 const cx = (...arr) => arr.filter(Boolean).join(' ');
 
