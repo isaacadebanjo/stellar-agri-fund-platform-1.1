@@ -180,6 +180,12 @@ POST /api/transactions/invest        { investorId, amount }
 POST /api/transactions/allocate      { projectId, amount }
 GET  /api/treasury/overview
 POST /api/distributions/generate     { projectId, platformFeePercent?, periodStart?, periodEnd? }
+
+# Institutional Readiness — Commercial (Phase 1)
+GET/POST/PATCH /api/buyers           # + /api/buyers/:id/archive, /api/buyers/summary
+GET/POST/PATCH /api/offtake          # offtake agreements + /api/offtake/summary
+GET/POST/PATCH /api/deliveries       # sales & delivery + /api/deliveries/summary
+GET/POST/PATCH /api/invoices         # payment cycles + /api/invoices/summary
 ```
 
 Write paths that move funds accept an `Idempotency-Key` header so a retried request never double-spends.
@@ -189,4 +195,15 @@ Additional API behaviors:
 - **Request correlation** — every response carries an `X-Request-Id` header (honoring an inbound one if present); the id also appears in the access log line for tracing.
 - **Money/auth rate limits** — money-moving and wallet-auth endpoints are rate-limited (see `MONEY_RATE_LIMIT_MAX` / `WALLET_AUTH_RATE_LIMIT_MAX`); exceeding the limit returns `429`.
 - **Distribution periods** — `POST /api/distributions/generate` records a reporting period (`periodStart`/`periodEnd`, defaulting to the current month-to-date). Each `(project, periodStart, periodEnd)` can be generated only once; a repeat returns `409` so a period can't be double-distributed.
-- **Opt-in pagination** — list endpoints (`/api/transactions`, `/api/investors`, `/api/payouts`, `/api/distributions`) return the full array by default, or a `{ data, pagination }` envelope when `page`/`limit` query params are supplied.
+- **Opt-in pagination** — list endpoints (`/api/transactions`, `/api/investors`, `/api/payouts`, `/api/distributions`, and the new commercial lists) return the full array by default, or a `{ data, pagination }` envelope when `page`/`limit` query params are supplied.
+
+## Institutional Readiness module (in progress)
+
+A governance/due-diligence layer being built on top of the platform, **without touching** the Stellar/treasury/auth core. **Phase 1 (Commercial) is implemented**: off-chain business records under a new **Commercial** nav section.
+
+- **Buyers** — register offtakers with verification status; summary of active/verified buyers + total contracted volume.
+- **Offtake agreements** — buyer commits to purchase a project's crop (quantity × unit price = contract value); summary of contracted revenue, contract utilization %, and remaining commitments.
+- **Sales & Delivery** — record harvest deliveries against agreements; delivered-vs-contracted, outstanding deliveries, revenue generated/collected.
+- **Payments** — invoice payment-cycle tracking with overdue alerts, average payment cycle (days), and collection rate.
+
+Phase 2 (KPI / yield / investor-confidence dashboards) and Phase 3 (governance approvals + milestone-gated capital release) are planned but not yet built.

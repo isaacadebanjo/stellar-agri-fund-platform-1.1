@@ -51,6 +51,38 @@ export function nonEmptyString(value, field) {
   return value.trim();
 }
 
+// A number >= 0 (e.g. quantities, prices that may be zero). Returns the Number.
+export function nonNegativeNumber(value, field = 'value') {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) {
+    throw new BadRequest(`${field} must be a number greater than or equal to 0`);
+  }
+  return n;
+}
+
+// One of an allowed set. Returns the value unchanged.
+export function enumValue(value, allowed, field = 'value') {
+  if (!allowed.includes(value)) {
+    throw new BadRequest(`${field} must be one of: ${allowed.join(', ')}`);
+  }
+  return value;
+}
+
+// An optional free-text string — returns a trimmed string ('' when omitted).
+export function optionalString(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+// An optional phone number — lenient format check, returns '' when omitted.
+export function optionalPhone(value, field = 'phone') {
+  if (value === undefined || value === null || String(value).trim() === '') return '';
+  const s = String(value).trim();
+  if (!/^[+]?[\d\s().-]{6,20}$/.test(s)) {
+    throw new BadRequest(`${field} must be a valid phone number`);
+  }
+  return s;
+}
+
 // An optional email. Returns '' when omitted, or a trimmed/lowercased address.
 // Lightweight sanity check (not full RFC 5322) — enough to reject obvious junk.
 export function optionalEmail(value, field = 'email') {

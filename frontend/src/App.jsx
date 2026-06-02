@@ -11,6 +11,10 @@ import Distributions from './components/Distributions.jsx';
 import Reports from './components/Reports.jsx';
 import Activity from './components/Activity.jsx';
 import Treasury from './components/Treasury.jsx';
+import Buyers from './components/Buyers.jsx';
+import Offtake from './components/Offtake.jsx';
+import Deliveries from './components/Deliveries.jsx';
+import Payments from './components/Payments.jsx';
 import Login from './components/Login.jsx';
 import InstallPrompt from './components/InstallPrompt.jsx';
 import { WalletBadge } from './components/ConnectWallet.jsx';
@@ -44,6 +48,15 @@ const NAV = [
       { id: 'farmers',      label: 'Farmers',      subtitle: 'Recipients of project payouts',        icon: IconTractor,   roles: ['admin'] },
       { id: 'payouts',      label: 'Payouts',      subtitle: 'Project → farmer disbursements',       icon: IconArrowDown, roles: ['admin'] },
       { id: 'revenue',      label: 'Revenue',      subtitle: 'Inflows from buyers and markets',      icon: IconArrowUp,   roles: ['admin'] }
+    ]
+  },
+  {
+    section: 'Commercial',
+    items: [
+      { id: 'buyers',     label: 'Buyers',          subtitle: 'Offtakers and due diligence',      icon: IconUsers,    roles: ['admin'] },
+      { id: 'offtake',    label: 'Offtake',         subtitle: 'Purchase agreements & contracts',  icon: IconReport,   roles: ['admin'] },
+      { id: 'deliveries', label: 'Sales & Delivery', subtitle: 'Harvest deliveries vs contracts',  icon: IconArrowUp,  roles: ['admin'] },
+      { id: 'payments',   label: 'Payments',        subtitle: 'Invoices & payment cycles',        icon: IconArrowDown, roles: ['admin'] }
     ]
   },
   {
@@ -231,6 +244,10 @@ function Shell({ user, logout }) {
           {tab === 'farmers'        && isAdmin && <Farmers refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'payouts'        && isAdmin && <Payouts refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'revenue'        && isAdmin && <Revenue refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'buyers'         && isAdmin && <Buyers refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'offtake'        && isAdmin && <Offtake refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'deliveries'     && isAdmin && <Deliveries refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'payments'       && isAdmin && <Payments refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'distributions'  && isAdmin && <Distributions refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'activity'       && isAdmin && <Activity refreshKey={refreshKey} />}
           {tab === 'reports'        && isAdmin && <Reports refreshKey={refreshKey} />}

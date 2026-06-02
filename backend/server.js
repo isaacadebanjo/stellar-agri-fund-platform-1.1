@@ -26,6 +26,10 @@ import activity from './routes/activity.js';
 import statements from './routes/statements.js';
 import treasury from './routes/treasury.js';
 import events from './routes/events.js';
+import buyers from './routes/buyers.js';
+import offtake from './routes/offtake.js';
+import deliveries from './routes/deliveries.js';
+import invoices from './routes/invoices.js';
 
 const app = express();
 
@@ -109,6 +113,10 @@ app.use('/api/reports', reports);
 app.use('/api/activity', activity);
 app.use('/api/statements', statements);
 app.use('/api/treasury', treasury);
+app.use('/api/buyers', buyers);
+app.use('/api/offtake', offtake);
+app.use('/api/deliveries', deliveries);
+app.use('/api/invoices', invoices);
 
 // Central error handler — catches anything thrown from asyncH-wrapped routes.
 // eslint-disable-next-line no-unused-vars

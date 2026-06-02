@@ -122,6 +122,32 @@ export const api = {
     list: () => request('GET', '/api/farmers'),
     create: (data) => request('POST', '/api/farmers', data)
   },
+  // --- Institutional Readiness: Commercial (Phase 1) ---
+  buyers: {
+    list: (params) => request('GET', '/api/buyers' + qs(params)),
+    summary: () => request('GET', '/api/buyers/summary'),
+    create: (data) => request('POST', '/api/buyers', data),
+    update: (id, data) => request('PATCH', `/api/buyers/${id}`, data),
+    archive: (id) => request('POST', `/api/buyers/${id}/archive`)
+  },
+  offtake: {
+    list: (params) => request('GET', '/api/offtake' + qs(params)),
+    summary: () => request('GET', '/api/offtake/summary'),
+    create: (data) => request('POST', '/api/offtake', data),
+    update: (id, data) => request('PATCH', `/api/offtake/${id}`, data)
+  },
+  deliveries: {
+    list: (params) => request('GET', '/api/deliveries' + qs(params)),
+    summary: () => request('GET', '/api/deliveries/summary'),
+    create: (data) => request('POST', '/api/deliveries', data),
+    update: (id, data) => request('PATCH', `/api/deliveries/${id}`, data)
+  },
+  invoices: {
+    list: (params) => request('GET', '/api/invoices' + qs(params)),
+    summary: () => request('GET', '/api/invoices/summary'),
+    create: (data) => request('POST', '/api/invoices', data),
+    update: (id, data) => request('PATCH', `/api/invoices/${id}`, data)
+  },
   revenue: {
     list: (projectId) => request('GET', '/api/revenue' + (projectId ? `?projectId=${projectId}` : '')),
     create: (data) => request('POST', '/api/revenue', data)
