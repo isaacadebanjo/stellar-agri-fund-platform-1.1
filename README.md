@@ -147,6 +147,19 @@ Investors can sign in with their own Stellar wallet instead of an admin-created 
 
 No frontend env vars are needed — the wallet libraries (`@stellar/freighter-api`, `@albedo-link/intent`) are bundled and lazy-loaded only when the user clicks Connect.
 
+### Wallet-first account creation (MetaMask-style onboarding)
+
+New investors can **create an account starting from their wallet** ("New here? Create an account with your wallet" on the login screen):
+
+1. Connect the wallet and sign a SEP-10 challenge (proof of ownership — no secret key leaves the wallet).
+2. Enter a name (email optional). `POST /api/auth/wallet/register` verifies the signed challenge, creates a **non-custodial** Investor (`custodial=false`, `stellarPublicKey` set) + linked `authType='wallet'` user, and issues a JWT.
+3. If the wallet is unfunded, the server **Friendbot-funds it on testnet** and returns the new balance. The onboarding screen shows "Wallet funded on testnet", or a **Fund wallet** button (`POST /api/auth/wallet/fund`) when the balance is still 0 (e.g. Friendbot disabled).
+
+Notes:
+- **Idempotent** — onboarding a wallet that already has an account returns the existing records (no duplicate, name not overwritten).
+- Reuses the same `SEP10_SERVER_SECRET` gate and the wallet-auth rate limiter (`WALLET_AUTH_RATE_LIMIT_MAX`). No secret keys are ever stored.
+- Funding is **best-effort**: if Friendbot is disabled (`STELLAR_FRIENDBOT_ENABLED=false`) or unreachable, the account is still created and the UI shows a "fund manually" hint. Testnet-only enforcement is unchanged.
+
 ## API (selected)
 
 ```
@@ -154,7 +167,9 @@ GET  /api/health                     # public; reports DB connectivity
 POST /api/auth/login                 { email, password }
 GET  /api/auth/me
 GET  /api/auth/wallet/challenge      ?account=G…             # SEP-10 challenge (testnet)
-POST /api/auth/wallet/verify         { transaction }         # SEP-10 verify → JWT
+POST /api/auth/wallet/verify         { transaction }         # SEP-10 verify → JWT (login)
+POST /api/auth/wallet/register       { transaction, name, email? }  # wallet-first account creation + Friendbot fund
+POST /api/auth/wallet/fund                                   # Friendbot-fund the caller's own wallet (auth)
 GET  /api/events?ticket=…            # SSE stream (ticket from /api/events/ticket)
 
 GET  /api/dashboard

@@ -51,6 +51,17 @@ export function nonEmptyString(value, field) {
   return value.trim();
 }
 
+// An optional email. Returns '' when omitted, or a trimmed/lowercased address.
+// Lightweight sanity check (not full RFC 5322) — enough to reject obvious junk.
+export function optionalEmail(value, field = 'email') {
+  if (value === undefined || value === null || String(value).trim() === '') return '';
+  const s = String(value).trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) {
+    throw new BadRequest(`${field} must be a valid email address`);
+  }
+  return s.toLowerCase();
+}
+
 // An optional ISO date. Returns a normalized Date (time stripped to UTC
 // midnight) or undefined when omitted. Throws if provided but unparseable.
 export function optionalIsoDate(value, field) {

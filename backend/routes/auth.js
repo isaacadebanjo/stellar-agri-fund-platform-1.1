@@ -7,6 +7,8 @@ import Investor from '../models/Investor.js';
 import { signToken, requireAuth, revokeToken } from '../middleware/auth.js';
 import { walletAuthLimiter } from '../middleware/rateLimit.js';
 import { isWalletAuthEnabled, buildChallenge, verifyChallenge, WALLET_NETWORK } from '../services/sep10.js';
+import { fundIfMissing, getLiveBalance } from '../services/stellar.js';
+import { nonEmptyString, optionalEmail } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 import { asyncH } from './_async.js';
 
@@ -153,6 +155,165 @@ r.post('/wallet/verify', walletAuthLimiter, asyncH(async (req, res) => {
   });
 
   res.json({ token, user: authUser(user) });
+}));
+
+// Wallet-first account creation (MetaMask-style onboarding, testnet).
+//
+// Flow: the wallet connects, signs a SEP-10 challenge (proof of ownership),
+// then the user supplies name/email and we create the non-custodial investor +
+// linked wallet user, fund the wallet via Friendbot if it's unfunded, and issue
+// a JWT — all in one call. The signed challenge here doubles as the ownership
+// proof, so no separate verify step is needed.
+//
+// Idempotent: a wallet that already has an investor/user just gets those records
+// back (no duplicate, name not overwritten). Funding is best-effort — the
+// account is still created if Friendbot is disabled/unreachable.
+r.post('/wallet/register', walletAuthLimiter, asyncH(async (req, res) => {
+  if (!isWalletAuthEnabled()) {
+    return res.status(503).json({ error: 'Wallet login is not enabled on this server.' });
+  }
+
+  const signedXdr = req.body?.transaction;
+  if (!signedXdr) return res.status(400).json({ error: 'transaction (signed challenge) is required' });
+
+  let publicKey;
+  try {
+    publicKey = verifyChallenge(signedXdr);
+  } catch {
+    return res.status(401).json({ error: 'Wallet signature verification failed' });
+  }
+
+  // Validate the profile fields (clean 400s via the shared helpers).
+  const name = nonEmptyString(req.body?.name, 'name');
+  const email = optionalEmail(req.body?.email);
+
+  // Find-or-create the non-custodial investor. The sparse-unique
+  // stellarPublicKey index makes a concurrent double-submit safe (11000 → refetch).
+  let investor = await Investor.findOne({ stellarPublicKey: publicKey });
+  let createdInvestor = false;
+  if (!investor) {
+    try {
+      investor = await Investor.create({ name, email, custodial: false, stellarPublicKey: publicKey });
+      createdInvestor = true;
+    } catch (e) {
+      if (e?.code === 11000) {
+        investor = await Investor.findOne({ stellarPublicKey: publicKey });
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  // Find-or-create the linked wallet user. Wallet users never password-login;
+  // the synthetic email/hash only satisfy the shared User schema.
+  let user = await User.findOne({ walletPublicKey: publicKey });
+  if (!user) {
+    try {
+      user = await User.create({
+        email: `${publicKey.toLowerCase()}@wallet.stellar`,
+        passwordHash: bcrypt.hashSync(crypto.randomBytes(24).toString('hex'), 10),
+        role: 'investor',
+        investorId: investor._id,
+        authType: 'wallet',
+        walletPublicKey: publicKey
+      });
+    } catch (e) {
+      if (e?.code === 11000) {
+        user = await User.findOne({ walletPublicKey: publicKey });
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  // Fund via Friendbot if the wallet isn't on testnet yet. Best-effort: a
+  // disabled/unreachable faucet must not fail account creation.
+  let balance = 0;
+  let funded = false;
+  let fundingError = null;
+  try {
+    const result = await fundIfMissing(publicKey);
+    funded = result.funded;
+    balance = await getLiveBalance(publicKey);
+  } catch (e) {
+    fundingError = e.message;
+    try { balance = await getLiveBalance(publicKey); } catch { balance = 0; }
+  }
+
+  // Activity: wallet connect (always) + account creation (only when new).
+  logActivity({
+    userId: user._id.toString(),
+    userRole: user.role,
+    actionType: ActivityTypes.LOGIN,
+    entityType: EntityTypes.SYSTEM,
+    entityId: user._id.toString(),
+    description: `Wallet ${publicKey.slice(0, 4)}…${publicKey.slice(-4)} connected`,
+    status: ActivityStatus.SUCCESS,
+    metadata: { authType: 'wallet', stellarPublicKey: publicKey, flow: 'register' }
+  });
+  if (createdInvestor) {
+    logActivity({
+      userId: user._id.toString(),
+      userRole: user.role,
+      actionType: ActivityTypes.CREATE_INVESTOR,
+      entityType: EntityTypes.INVESTOR,
+      entityId: investor._id.toString(),
+      description: `Non-custodial investor "${investor.name}" created via wallet onboarding`,
+      status: ActivityStatus.SUCCESS,
+      metadata: {
+        investorName: investor.name,
+        custodial: false,
+        stellarPublicKey: publicKey,
+        funded
+      }
+    });
+  }
+
+  const token = signToken(user);
+  res.status(createdInvestor ? 201 : 200).json({
+    token,
+    user: authUser(user),
+    investor: {
+      id: investor._id,
+      name: investor.name,
+      email: investor.email,
+      custodial: false,
+      stellarPublicKey: publicKey
+    },
+    wallet: { publicKey, balance, funded, fundingError }
+  });
+}));
+
+// Friendbot-fund the authenticated wallet user's own account (testnet). Used by
+// the onboarding "Fund wallet" action when the wallet is still at 0 balance
+// (e.g. Friendbot was momentarily unreachable during registration).
+r.post('/wallet/fund', requireAuth, walletAuthLimiter, asyncH(async (req, res) => {
+  const user = await User.findById(req.user.id);
+  if (!user || user.authType !== 'wallet' || !user.walletPublicKey) {
+    return res.status(400).json({ error: 'No connected wallet on this account' });
+  }
+
+  let funded = false;
+  try {
+    const result = await fundIfMissing(user.walletPublicKey);
+    funded = result.funded;
+  } catch (e) {
+    return res.status(400).json({ error: e.message });
+  }
+  const balance = await getLiveBalance(user.walletPublicKey);
+
+  logActivity({
+    userId: user._id.toString(),
+    userRole: user.role,
+    actionType: ActivityTypes.FUND_WALLET,
+    entityType: EntityTypes.WALLET,
+    entityId: user.walletPublicKey,
+    description: `Friendbot-funded wallet ${user.walletPublicKey.slice(0, 4)}…${user.walletPublicKey.slice(-4)} (testnet)`,
+    status: ActivityStatus.SUCCESS,
+    metadata: { stellarPublicKey: user.walletPublicKey, funded, balance }
+  });
+
+  res.json({ publicKey: user.walletPublicKey, balance, funded });
 }));
 
 // Refresh: rotate to a fresh token and revoke the old one (sliding session).

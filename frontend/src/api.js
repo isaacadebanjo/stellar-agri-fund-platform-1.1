@@ -86,7 +86,12 @@ export const api = {
     // SEP-10 non-custodial wallet login (testnet).
     walletChallenge: (account) =>
       request('GET', `/api/auth/wallet/challenge?account=${encodeURIComponent(account)}`),
-    walletVerify: (transaction) => request('POST', '/api/auth/wallet/verify', { transaction })
+    walletVerify: (transaction) => request('POST', '/api/auth/wallet/verify', { transaction }),
+    // Wallet-first account creation: signed SEP-10 challenge + profile fields.
+    walletRegister: ({ transaction, name, email }) =>
+      request('POST', '/api/auth/wallet/register', { transaction, name, email }),
+    // Friendbot-fund the authenticated wallet user's own account (testnet).
+    walletFund: () => request('POST', '/api/auth/wallet/fund')
   },
   dashboard: () => request('GET', '/api/dashboard'),
   investors: {

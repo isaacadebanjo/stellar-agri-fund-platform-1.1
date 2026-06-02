@@ -69,6 +69,38 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // --- Wallet-first onboarding (create account with a connected wallet) ------
+
+  // Step 1: connect the wallet and sign a SEP-10 challenge (proof of ownership).
+  // Does NOT log in — returns the signed proof so the UI can collect a name/email
+  // before creating the account.
+  const connectWalletForRegister = useCallback(async (providerId) => {
+    const wallet = WALLETS[providerId];
+    if (!wallet) throw new Error('Unknown wallet provider');
+    const publicKey = await wallet.getKey();
+    const { transaction } = await api.auth.walletChallenge(publicKey);
+    const signedXdr = await wallet.sign(transaction, publicKey);
+    return { transaction: signedXdr, publicKey, providerId };
+  }, []);
+
+  // Step 2: create (or fetch) the account. Stores the token so the follow-up
+  // "Fund wallet" call is authenticated, but defers setUser until the user
+  // finishes the onboarding screen (enterWalletSession).
+  const registerWithWallet = useCallback(async ({ transaction, name, email }) => {
+    const res = await api.auth.walletRegister({ transaction, name, email });
+    tokenStore.set(res.token);
+    return res; // { token, user, investor, wallet }
+  }, []);
+
+  // Optional: Friendbot-fund the freshly created wallet if it's still at 0.
+  const fundMyWallet = useCallback(() => api.auth.walletFund(), []);
+
+  // Step 3: finish onboarding — enter the app with the wallet session.
+  const enterWalletSession = useCallback((u, providerId) => {
+    if (providerId) rememberWalletProvider(providerId);
+    setUser(u);
+  }, []);
+
   const logout = useCallback(async () => {
     try { await api.auth.logout(); } catch { /* ignore */ }
     tokenStore.clear();
@@ -77,7 +109,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, error, login, loginWithWallet, logout }}>
+    <AuthCtx.Provider value={{
+      user, loading, error, login, loginWithWallet, logout,
+      connectWalletForRegister, registerWithWallet, fundMyWallet, enterWalletSession
+    }}>
       {children}
     </AuthCtx.Provider>
   );

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuth } from '../auth.jsx';
 import { Button, Input, Field, ErrorBanner } from './ui.jsx';
 import ConnectWallet from './ConnectWallet.jsx';
+import WalletOnboard from './WalletOnboard.jsx';
 
 const DEMOS = [
   { label: 'Admin',    email: 'daksh@agri.io',    password: '123456'      },
@@ -14,6 +15,8 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  // Toggles the wallet-first "create account" flow in the wallet panel.
+  const [onboarding, setOnboarding] = useState(false);
 
   async function submit(e) {
     e.preventDefault();
@@ -70,9 +73,23 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* Non-custodial wallet login (Freighter / Albedo, testnet). */}
+          {/* Non-custodial wallet login + wallet-first account creation
+              (Freighter / Albedo, testnet). */}
           <div className="mt-6 pt-5 border-t border-slate-200">
-            <ConnectWallet />
+            {onboarding ? (
+              <WalletOnboard onCancel={() => setOnboarding(false)} />
+            ) : (
+              <>
+                <ConnectWallet />
+                <button
+                  type="button"
+                  onClick={() => setOnboarding(true)}
+                  className="mt-3 w-full text-center text-xs font-medium text-brand-700 hover:text-brand-800"
+                >
+                  New here? Create an account with your wallet →
+                </button>
+              </>
+            )}
           </div>
 
           <div className="mt-6 pt-5 border-t border-slate-200">
