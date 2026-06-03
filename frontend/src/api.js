@@ -49,6 +49,27 @@ async function request(method, url, body, { idempotencyKey } = {}) {
   return res.json();
 }
 
+// Like `request`, but sends multipart/form-data (file uploads). The browser
+// sets the Content-Type (with boundary) automatically, so we must NOT set it.
+async function requestForm(method, url, formData) {
+  const headers = {};
+  const token = tokenStore.get();
+  if (token) headers.Authorization = `Bearer ${token}`;
+
+  const res = await fetch(API_BASE + url, { method, headers, body: formData });
+
+  if (res.status === 401) {
+    tokenStore.clear();
+    if (onUnauthorized) onUnauthorized();
+    throw new Error('Session expired — please sign in again');
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || 'Request failed');
+  }
+  return res.json();
+}
+
 // Like `request`, but for binary downloads (e.g. PDF statements): same
 // API_BASE, auth header and 401 handling, but resolves to a Blob.
 async function requestBlob(url) {
@@ -161,6 +182,8 @@ export const api = {
   governance: {
     pending: () => request('GET', '/api/governance/pending'),
     list: (params) => request('GET', '/api/governance' + qs(params)),
+    dashboard: () => request('GET', '/api/governance/dashboard'),
+    history: (params) => request('GET', '/api/governance/history' + qs(params)),
     approve: (id, comments) => request('POST', `/api/governance/${id}/approve`, { comments }),
     reject: (id, comments) => request('POST', `/api/governance/${id}/reject`, { comments })
   },
@@ -170,7 +193,37 @@ export const api = {
     create: (data) => request('POST', '/api/milestones', data),
     update: (id, data) => request('PATCH', `/api/milestones/${id}`, data),
     approve: (id) => request('POST', `/api/milestones/${id}/approve`),
-    reject: (id) => request('POST', `/api/milestones/${id}/reject`)
+    reject: (id) => request('POST', `/api/milestones/${id}/reject`),
+    attach: (id, documentId, kind) => request('POST', `/api/milestones/${id}/attach`, { documentId, kind }),
+    detach: (id, documentId) => request('POST', `/api/milestones/${id}/detach`, { documentId })
+  },
+  // --- Institutional-grade upgrade: Document Management (Phase 1) ---
+  documents: {
+    categories: () => request('GET', '/api/documents/categories'),
+    list: (params) => request('GET', '/api/documents' + qs(params)),
+    get: (id) => request('GET', `/api/documents/${id}`),
+    versions: (id) => request('GET', `/api/documents/${id}/versions`),
+    upload: (formData) => requestForm('POST', '/api/documents', formData),
+    uploadVersion: (id, formData) => requestForm('POST', `/api/documents/${id}/version`, formData),
+    archive: (id) => request('POST', `/api/documents/${id}/archive`),
+    downloadBlob: (id) => requestBlob(`/api/documents/${id}/download`),
+    previewBlob: (id) => requestBlob(`/api/documents/${id}/preview`)
+  },
+  // --- Institutional-grade upgrade: Investor Data Room (Phase 2) ---
+  dataRoom: {
+    overview: (params) => request('GET', '/api/data-room/overview' + qs(params)),
+    documents: (params) => request('GET', '/api/data-room/documents' + qs(params)),
+    downloadBlob: (id, params) => requestBlob(`/api/data-room/documents/${id}/download` + qs(params)),
+    statementPdf: (params) => requestBlob('/api/data-room/statement/pdf' + qs(params))
+  },
+  // --- Institutional-grade upgrade: Board & Investor Reporting (Phase 4) ---
+  boardReports: {
+    json: (kind, params) => request('GET', `/api/board-reports/${kind}` + qs(params)),
+    downloadBlob: (kind, params) => requestBlob(`/api/board-reports/${kind}` + qs(params))
+  },
+  // --- Institutional-grade upgrade: Executive Dashboard (Phase 6) ---
+  executive: {
+    overview: (params) => request('GET', '/api/executive/overview' + qs(params))
   },
   revenue: {
     list: (projectId) => request('GET', '/api/revenue' + (projectId ? `?projectId=${projectId}` : '')),
@@ -222,6 +275,26 @@ export const api = {
     }
   }
 };
+
+// Save a Blob (from requestBlob) to disk as `filename`.
+export function downloadBlob(filename, blob) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// Open a Blob (from requestBlob) in a new browser tab (inline preview).
+export function openBlob(blob) {
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank', 'noopener');
+  // Revoke a bit later so the new tab has time to load it.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
 
 // Trigger a JSON file download in the browser.
 export function downloadJson(filename, data) {

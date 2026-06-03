@@ -20,6 +20,10 @@ import Yields from './components/Yields.jsx';
 import InvestorConfidence from './components/InvestorConfidence.jsx';
 import Governance from './components/Governance.jsx';
 import Milestones from './components/Milestones.jsx';
+import Documents from './components/Documents.jsx';
+import DataRoom from './components/DataRoom.jsx';
+import BoardReports from './components/BoardReports.jsx';
+import ExecutiveDashboard from './components/ExecutiveDashboard.jsx';
 import Login from './components/Login.jsx';
 import InstallPrompt from './components/InstallPrompt.jsx';
 import { WalletBadge } from './components/ConnectWallet.jsx';
@@ -68,8 +72,17 @@ const NAV = [
   {
     section: 'Governance',
     items: [
+      { id: 'executive',  label: 'Executive',  subtitle: 'Governance scores & risk',             icon: IconReport, roles: ['admin'] },
       { id: 'governance', label: 'Approvals',  subtitle: 'Pending approvals & history',          icon: IconAudit, roles: ['admin'] },
       { id: 'milestones', label: 'Milestones', subtitle: 'Milestone-based capital release',      icon: IconList,  roles: ['admin'] }
+    ]
+  },
+  {
+    section: 'Data Room',
+    items: [
+      { id: 'documents',  label: 'Documents',   subtitle: 'Central document management',          icon: IconReport, roles: ['admin'] },
+      { id: 'data-room',  label: 'Data Room',   subtitle: 'Investor due-diligence portal',        icon: IconVault,  roles: ['admin'] },
+      { id: 'board-reports', label: 'Board Reports', subtitle: 'Monthly, quarterly & board packs', icon: IconReport, roles: ['admin'] }
     ]
   },
   {
@@ -90,6 +103,7 @@ const INVESTOR_NAV = [
     section: 'Portfolio',
     items: [
       { id: 'investor-dashboard', label: 'My Portfolio', subtitle: 'Your investments, returns, and projects', icon: IconUser, roles: ['investor'] },
+      { id: 'data-room', label: 'Data Room', subtitle: 'Your statements, reports & documents', icon: IconVault, roles: ['investor'] },
       { id: 'investor-confidence', label: 'Investor Confidence', subtitle: 'Institutional-readiness signals', icon: IconReport, roles: ['investor'] }
     ]
   }
@@ -266,12 +280,16 @@ function Shell({ user, logout }) {
           {tab === 'payments'       && isAdmin && <Payments refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'kpi'            && isAdmin && <KpiDashboard refreshKey={refreshKey} />}
           {tab === 'yields'         && isAdmin && <Yields refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'executive'      && isAdmin && <ExecutiveDashboard refreshKey={refreshKey} />}
           {tab === 'governance'     && isAdmin && <Governance refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'milestones'     && isAdmin && <Milestones refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'documents'      && isAdmin && <Documents refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'board-reports'  && isAdmin && <BoardReports refreshKey={refreshKey} />}
           {tab === 'distributions'  && isAdmin && <Distributions refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'activity'       && isAdmin && <Activity refreshKey={refreshKey} />}
           {tab === 'reports'        && isAdmin && <Reports refreshKey={refreshKey} />}
           {/* Shared */}
+          {tab === 'data-room' && <DataRoom refreshKey={refreshKey} isAdmin={isAdmin} />}
           {tab === 'investor-confidence' && <InvestorConfidence refreshKey={refreshKey} />}
           {tab === 'investor-dashboard' && (
             <InvestorDashboard

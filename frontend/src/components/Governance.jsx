@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { Section, Button, Badge, TableWrap, Empty, ErrorBanner, fmt } from './ui.jsx';
+import { Section, StatCard, Cards, Button, Badge, TableWrap, Empty, ErrorBanner, fmt } from './ui.jsx';
 
 const statusKind = (s) => (s === 'approved' ? 'paid' : s === 'rejected' ? 'cancelled' : 'pending');
 
 export default function Governance({ refreshKey, onChange }) {
   const [pending, setPending] = useState([]);
   const [history, setHistory] = useState([]);
+  const [dash, setDash] = useState(null);
   const [err, setErr] = useState('');
 
-  const load = () => Promise.all([api.governance.pending(), api.governance.list({ page: 1, limit: 50 })])
-    .then(([p, h]) => { setPending(p); setHistory(h.data || []); })
+  const load = () => Promise.all([
+    api.governance.pending(),
+    api.governance.history({ page: 1, limit: 50 }),
+    api.governance.dashboard()
+  ])
+    .then(([p, h, d]) => { setPending(p); setHistory(h.data || []); setDash(d); })
     .catch(e => setErr(e.message));
   useEffect(() => { load(); }, [refreshKey]);
 
@@ -25,6 +30,16 @@ export default function Governance({ refreshKey, onChange }) {
 
   return (
     <>
+      {dash && (
+        <Cards cols={5}>
+          <StatCard label="Pending" value={dash.pending} accent={dash.pending ? 'ACTION' : undefined} sub={dash.oldestPendingHours ? `oldest ${dash.oldestPendingHours}h` : 'none waiting'} />
+          <StatCard label="Approved" value={dash.approved} />
+          <StatCard label="Rejected" value={dash.rejected} />
+          <StatCard label="Approval Rate" value={`${dash.approvalRate}%`} sub={`${dash.total} total requests`} />
+          <StatCard label="Avg Decision" value={`${dash.avgDecisionHours}h`} sub="submit → decision" />
+        </Cards>
+      )}
+
       <Section
         title="Pending Approvals"
         subtitle="Sensitive actions awaiting governance sign-off. Approve, then run the action again to execute."
@@ -37,13 +52,14 @@ export default function Governance({ refreshKey, onChange }) {
             <table>
               <thead>
                 <tr>
-                  <th>Requested</th><th>Action</th><th>Summary</th>
+                  <th>Request ID</th><th>Requested</th><th>Action</th><th>Summary</th>
                   <th className="!text-right">Amount</th><th className="!text-right"></th>
                 </tr>
               </thead>
               <tbody>
                 {pending.map(a => (
                   <tr key={a.id}>
+                    <td className="font-mono text-xs text-slate-400">{a.id}</td>
                     <td className="text-slate-500 whitespace-nowrap">{new Date(a.createdAt).toLocaleString()}</td>
                     <td><Badge kind="pending">{a.actionType}</Badge></td>
                     <td>{a.summary}</td>

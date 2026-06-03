@@ -5,7 +5,11 @@ import {
 } from './ui.jsx';
 
 const statusKind = (s) => (s === 'approved' ? 'paid' : s === 'rejected' ? 'cancelled' : 'pending');
-const EMPTY = { title: '', description: '', targetDate: '', releaseAmount: '', completionPercent: '', docName: '', docUrl: '' };
+const EVIDENCE_CATEGORIES = ['Milestone Evidence', 'Site Photos'];
+const EMPTY = {
+  title: '', description: '', targetDate: '', completionDate: '', releaseAmount: '', completionPercent: '',
+  gpsNotes: '', verificationNotes: '', docName: '', docUrl: ''
+};
 
 export default function Milestones({ refreshKey, onChange }) {
   const [projects, setProjects] = useState([]);
@@ -15,11 +19,18 @@ export default function Milestones({ refreshKey, onChange }) {
   const [form, setForm] = useState(EMPTY);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
+  const [evidenceDocs, setEvidenceDocs] = useState([]);
+  const [expanded, setExpanded] = useState(null);
+  const [attachSel, setAttachSel] = useState('');
 
   useEffect(() => {
     api.projects.list()
       .then(p => { setProjects(p); setProjectId(curr => curr || p[0]?.id || ''); })
       .catch(e => setErr(e.message));
+    // Documents available to attach as milestone evidence (active only).
+    api.documents.list({ status: 'active' })
+      .then(r => setEvidenceDocs((r.data || r).filter(d => EVIDENCE_CATEGORIES.includes(d.category))))
+      .catch(() => {});
   }, [refreshKey]);
 
   const loadProject = () => {
@@ -29,6 +40,16 @@ export default function Milestones({ refreshKey, onChange }) {
       .catch(e => setErr(e.message));
   };
   useEffect(() => { loadProject(); }, [projectId, refreshKey]);
+
+  async function attach(milestoneId) {
+    if (!attachSel) return;
+    try { await api.milestones.attach(milestoneId, attachSel); setAttachSel(''); loadProject(); onChange?.(); }
+    catch (e) { setErr(e.message); }
+  }
+  async function detach(milestoneId, documentId) {
+    try { await api.milestones.detach(milestoneId, documentId); loadProject(); onChange?.(); }
+    catch (e) { setErr(e.message); }
+  }
 
   const project = projects.find(p => p.id === projectId);
 
@@ -42,6 +63,9 @@ export default function Milestones({ refreshKey, onChange }) {
         title: form.title,
         description: form.description,
         targetDate: form.targetDate,
+        completionDate: form.completionDate,
+        gpsNotes: form.gpsNotes,
+        verificationNotes: form.verificationNotes,
         releaseAmount: Number(form.releaseAmount) || 0,
         completionPercent: Number(form.completionPercent) || 0,
         verificationDocs: form.docName || form.docUrl ? [{ name: form.docName, url: form.docUrl }] : []
@@ -108,12 +132,15 @@ export default function Milestones({ refreshKey, onChange }) {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <Field label="Title"><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} required /></Field>
             <Field label="Target date"><Input type="date" value={form.targetDate} onChange={e => setForm({ ...form, targetDate: e.target.value })} /></Field>
+            <Field label="Completion date"><Input type="date" value={form.completionDate} onChange={e => setForm({ ...form, completionDate: e.target.value })} /></Field>
             <Field label="Release amount (XLM)"><Input type="number" min="0" step="0.01" value={form.releaseAmount} onChange={e => setForm({ ...form, releaseAmount: e.target.value })} /></Field>
             <Field label="Completion %"><Input type="number" min="0" max="100" value={form.completionPercent} onChange={e => setForm({ ...form, completionPercent: e.target.value })} /></Field>
+            <Field label="GPS notes"><Input value={form.gpsNotes} onChange={e => setForm({ ...form, gpsNotes: e.target.value })} placeholder="lat, lng or notes" /></Field>
             <Field label="Verification doc name"><Input value={form.docName} onChange={e => setForm({ ...form, docName: e.target.value })} /></Field>
             <Field label="Verification doc URL"><Input value={form.docUrl} onChange={e => setForm({ ...form, docUrl: e.target.value })} placeholder="https://…" /></Field>
           </div>
           <Field label="Description"><Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></Field>
+          <Field label="Verification notes"><Input value={form.verificationNotes} onChange={e => setForm({ ...form, verificationNotes: e.target.value })} placeholder="Reviewer notes" /></Field>
           <div className="flex justify-end"><Button disabled={busy || !projectId}>{busy ? 'Saving…' : 'Add milestone'}</Button></div>
         </form>
       </Section>
@@ -131,10 +158,13 @@ export default function Milestones({ refreshKey, onChange }) {
                 </tr>
               </thead>
               <tbody>
-                {milestones.map(m => (
-                  <tr key={m.id}>
+                {milestones.map(m => {
+                  const evidenceCount = (m.documents?.length || 0) + (m.photos?.length || 0);
+                  return (
+                  <React.Fragment key={m.id}>
+                  <tr>
                     <td className="font-medium text-slate-900">{m.title}{m.description && <div className="text-xs text-slate-500">{m.description}</div>}</td>
-                    <td className="text-slate-500 whitespace-nowrap">{m.targetDate || '—'}</td>
+                    <td className="text-slate-500 whitespace-nowrap">{m.targetDate || '—'}{m.completionDate && <div className="text-xs text-emerald-600">done {m.completionDate}</div>}</td>
                     <td className="text-right tabular-nums">{m.completionPercent}%</td>
                     <td className="text-right tabular-nums">{fmt(m.releaseAmount)}</td>
                     <td className="text-xs">
@@ -145,15 +175,53 @@ export default function Milestones({ refreshKey, onChange }) {
                     </td>
                     <td><Badge kind={statusKind(m.approvalStatus)}>{m.approvalStatus}</Badge></td>
                     <td className="text-right">
-                      {m.approvalStatus === 'pending' && (
-                        <div className="inline-flex gap-2">
-                          <Button variant="ghost" onClick={() => decide(m.id, 'reject')}>Reject</Button>
-                          <Button onClick={() => decide(m.id, 'approve')}>Approve</Button>
-                        </div>
-                      )}
+                      <div className="inline-flex gap-2">
+                        <Button variant="ghost" onClick={() => setExpanded(expanded === m.id ? null : m.id)}>
+                          Evidence{evidenceCount ? ` (${evidenceCount})` : ''}
+                        </Button>
+                        {m.approvalStatus === 'pending' && (
+                          <>
+                            <Button variant="ghost" onClick={() => decide(m.id, 'reject')}>Reject</Button>
+                            <Button onClick={() => decide(m.id, 'approve')}>Approve</Button>
+                          </>
+                        )}
+                      </div>
                     </td>
                   </tr>
-                ))}
+                  {expanded === m.id && (
+                    <tr>
+                      <td colSpan={7} className="bg-slate-50/60">
+                        <div className="px-2 py-2 space-y-2">
+                          {m.gpsNotes && <div className="text-xs text-slate-600"><span className="font-medium">GPS:</span> {m.gpsNotes}</div>}
+                          {m.verificationNotes && <div className="text-xs text-slate-600"><span className="font-medium">Verification:</span> {m.verificationNotes}</div>}
+                          <div className="text-xs font-medium text-slate-700">Attached evidence</div>
+                          {evidenceCount === 0 ? (
+                            <div className="text-xs text-slate-400">No documents or photos attached.</div>
+                          ) : (
+                            <div className="space-y-1">
+                              {[...(m.documents || []).map(d => ({ ...d, kind: 'doc' })), ...(m.photos || []).map(d => ({ ...d, kind: 'photo' }))].map(d => (
+                                <div key={d.documentId} className="flex items-center justify-between text-xs">
+                                  <span>{d.kind === 'photo' ? '🖼️' : '📄'} {d.title} <span className="text-slate-400">({d.fileName})</span></span>
+                                  <button className="text-rose-600 hover:underline" onClick={() => detach(m.id, d.documentId)}>detach</button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          <div className="flex items-center gap-2 pt-1">
+                            <Select value={attachSel} onChange={e => setAttachSel(e.target.value)}>
+                              <option value="">Select a document…</option>
+                              {evidenceDocs.map(d => <option key={d.id} value={d.id}>{d.category === 'Site Photos' ? '🖼️ ' : '📄 '}{d.title}</option>)}
+                            </Select>
+                            <Button variant="ghost" onClick={() => attach(m.id)} disabled={!attachSel}>Attach</Button>
+                            <span className="text-[11px] text-slate-400">Upload files in the Documents tab (category “Milestone Evidence” or “Site Photos”).</span>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </TableWrap>
