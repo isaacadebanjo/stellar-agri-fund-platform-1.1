@@ -257,6 +257,25 @@ export const api = {
     countries: () => request('GET', '/api/geography/countries'),
     overview: () => request('GET', '/api/geography/overview')
   },
+  // --- Presentation Center (deck, one-pager, architecture, packs) ---
+  presentation: {
+    snapshot: () => request('GET', '/api/presentation/snapshot'),
+    deckBlob: () => requestBlob('/api/presentation/deck.pdf'),
+    onePagerBlob: () => requestBlob('/api/presentation/one-pager.pdf'),
+    architectureBlob: () => requestBlob('/api/presentation/architecture.pdf'),
+    packBlob: (kind) => requestBlob(`/api/presentation/pack/${kind}.pdf`)
+  },
+  // --- Investment Committee Assistant (hybrid) ---
+  assistant: {
+    status: () => request('GET', '/api/assistant/status'),
+    query: (prompt, enhance = true) => request('POST', '/api/assistant/query', { prompt, enhance })
+  },
+  // --- Demo environment generator (gated by ALLOW_DEMO_SEED) ---
+  demo: {
+    status: () => request('GET', '/api/demo/status'),
+    seed: () => request('POST', '/api/demo/seed', { confirm: true }),
+    reset: () => request('POST', '/api/demo/reset', { confirm: true })
+  },
   revenue: {
     list: (projectId) => request('GET', '/api/revenue' + (projectId ? `?projectId=${projectId}` : '')),
     create: (data) => request('POST', '/api/revenue', data)

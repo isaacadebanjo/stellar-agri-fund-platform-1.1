@@ -31,6 +31,11 @@ import FarmVisits from './components/FarmVisits.jsx';
 import NotificationBell from './components/NotificationBell.jsx';
 import Timeline from './components/Timeline.jsx';
 import Geography from './components/Geography.jsx';
+import PresentationCenter from './components/PresentationCenter.jsx';
+import Architecture from './components/Architecture.jsx';
+import AssistantPanel from './components/AssistantPanel.jsx';
+import DemoEnvironment from './components/DemoEnvironment.jsx';
+import DemoMode from './components/DemoMode.jsx';
 import Login from './components/Login.jsx';
 import InstallPrompt from './components/InstallPrompt.jsx';
 import { WalletBadge } from './components/ConnectWallet.jsx';
@@ -98,6 +103,15 @@ const NAV = [
     ]
   },
   {
+    section: 'Presentation',
+    items: [
+      { id: 'presentation', label: 'Presentation Center', subtitle: 'Investor deck, one-pager & packs', icon: IconReport, roles: ['admin'] },
+      { id: 'assistant',    label: 'IC Assistant',        subtitle: 'AI/analytics committee briefings', icon: IconAudit,  roles: ['admin'] },
+      { id: 'architecture', label: 'Architecture',        subtitle: 'Platform diagrams & exports',      icon: IconShare,  roles: ['admin'] },
+      { id: 'demo',         label: 'Demo Environment',    subtitle: 'One-click demo data & reset',      icon: IconRefresh, roles: ['admin'] }
+    ]
+  },
+  {
     section: 'Insights',
     items: [
       { id: 'kpi',           label: 'KPI Dashboard', subtitle: 'Operational & per-hectare metrics',   icon: IconHome,   roles: ['admin'] },
@@ -153,6 +167,7 @@ function Shell({ user, logout }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [liveTick, setLiveTick] = useState(null);
   const [notifTick, setNotifTick] = useState(0);
+  const [demoMode, setDemoMode] = useState(false);
   const refresh = () => setRefreshKey(k => k + 1);
 
   // Debounce burst events (e.g. a distribution run that writes 20 rows)
@@ -266,6 +281,11 @@ function Shell({ user, logout }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {isAdmin && (
+                <button className="btn-primary" onClick={() => setDemoMode(true)}>
+                  Present
+                </button>
+              )}
               <NotificationBell liveTick={notifTick} />
               <WalletBadge />
               <LiveBadge tick={liveTick} />
@@ -310,6 +330,10 @@ function Shell({ user, logout }) {
           {tab === 'timeline'       && isAdmin && <Timeline refreshKey={refreshKey} />}
           {tab === 'activity'       && isAdmin && <Activity refreshKey={refreshKey} />}
           {tab === 'reports'        && isAdmin && <Reports refreshKey={refreshKey} />}
+          {tab === 'presentation'   && isAdmin && <PresentationCenter refreshKey={refreshKey} />}
+          {tab === 'assistant'      && isAdmin && <AssistantPanel refreshKey={refreshKey} />}
+          {tab === 'architecture'   && isAdmin && <Architecture />}
+          {tab === 'demo'           && isAdmin && <DemoEnvironment refreshKey={refreshKey} onChange={refresh} />}
           {/* Shared */}
           {tab === 'simulator' && <RoiSimulator />}
           {tab === 'data-room' && <DataRoom refreshKey={refreshKey} isAdmin={isAdmin} />}
@@ -325,6 +349,13 @@ function Shell({ user, logout }) {
       </div>
 
       <InstallPrompt />
+
+      {demoMode && (
+        <DemoMode
+          onNavigate={(id) => { setTab(id); setMobileOpen(false); }}
+          onExit={() => setDemoMode(false)}
+        />
+      )}
     </div>
   );
 }

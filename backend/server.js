@@ -45,6 +45,9 @@ import simulator from './routes/simulator.js';
 import farmVisits from './routes/farmVisits.js';
 import notifications from './routes/notifications.js';
 import geography from './routes/geography.js';
+import presentation from './routes/presentation.js';
+import assistant from './routes/assistant.js';
+import demo from './routes/demo.js';
 
 const app = express();
 
@@ -147,6 +150,9 @@ app.use('/api/simulator', simulator);
 app.use('/api/farm-visits', farmVisits);
 app.use('/api/notifications', notifications);
 app.use('/api/geography', geography);
+app.use('/api/presentation', presentation);
+app.use('/api/assistant', assistant);
+app.use('/api/demo', demo);
 
 // Central error handler — catches anything thrown from asyncH-wrapped routes.
 // eslint-disable-next-line no-unused-vars

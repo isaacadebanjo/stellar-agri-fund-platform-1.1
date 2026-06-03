@@ -46,6 +46,12 @@ export function validateEnv() {
           'Set it to your Vercel frontend origin(s).'
       );
     }
+    if (process.env.ALLOW_DEMO_SEED === 'true') {
+      warnings.push(
+        'ALLOW_DEMO_SEED=true in production — the destructive demo seed/reset endpoints are ENABLED. ' +
+          'Unset it unless this is a demo/staging deploy.'
+      );
+    }
   }
 
   // Optional non-custodial wallet login (SEP-10). If the signing secret is set,
