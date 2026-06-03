@@ -15,6 +15,13 @@ const ProjectSchema = new mongoose.Schema({
   spent: { type: Number, default: 0, min: 0 },
   // Hectares under cultivation — feeds per-hectare KPIs. Additive, defaults to 0.
   hectares: { type: Number, default: 0, min: 0 },
+  // Multi-country support (additive, all optional). `country` is an ISO-3166
+  // alpha-2 code (e.g. 'ZA'); `region` is a free-text province/region; `currency`
+  // is the local reporting currency (e.g. 'ZAR'). Existing projects default to ''
+  // so behaviour is unchanged until set.
+  country: { type: String, default: '', index: true },
+  region: { type: String, default: '' },
+  currency: { type: String, default: '' },
   // When true, treasury allocations to this project are gated on approved
   // milestone release budget (milestone-based capital release). Off by default
   // so existing projects/flows are unaffected.

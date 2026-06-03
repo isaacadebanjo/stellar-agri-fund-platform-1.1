@@ -57,6 +57,7 @@ export function useEventStream(onEvent, enabled = true) {
       es.addEventListener('message', handle);
       es.addEventListener('hello', handle);
       es.addEventListener('activity', handle);
+      es.addEventListener('notification', handle);
       es.onerror = () => {
         // Likely an expired ticket — rebuild with a fresh one.
         es?.close();
@@ -73,6 +74,7 @@ export function useEventStream(onEvent, enabled = true) {
         es.removeEventListener('message', handle);
         es.removeEventListener('hello', handle);
         es.removeEventListener('activity', handle);
+        es.removeEventListener('notification', handle);
         es.close();
       }
     };

@@ -27,3 +27,4 @@ export function IconLogout(p)    { return <IconBase {...p}><path d="M9 4H5a2 2 0
 export function IconAudit(p)     { return <IconBase {...p}><path d="M9 4H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-4"/><path d="M8 9h8M8 13h8M8 17h4"/></IconBase>; }
 export function IconVault(p)     { return <IconBase {...p}><rect x="3" y="7" width="18" height="12" rx="2"/><circle cx="12" cy="13" r="2.5"/><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/></IconBase>; }
 export function IconWallet(p)     { return <IconBase {...p}><path d="M3 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v1"/><rect x="3" y="7" width="18" height="12" rx="2"/><path d="M16 12.5h.01"/><path d="M21 11h-4a1.5 1.5 0 0 0 0 3h4"/></IconBase>; }
+export function IconBell(p)        { return <IconBase {...p}><path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10.5 19a1.5 1.5 0 0 0 3 0"/></IconBase>; }

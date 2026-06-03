@@ -39,6 +39,12 @@ import documents from './routes/documents.js';
 import dataRoom from './routes/dataRoom.js';
 import boardReports from './routes/boardReports.js';
 import executive from './routes/executive.js';
+import risk from './routes/risk.js';
+import forecast from './routes/forecast.js';
+import simulator from './routes/simulator.js';
+import farmVisits from './routes/farmVisits.js';
+import notifications from './routes/notifications.js';
+import geography from './routes/geography.js';
 
 const app = express();
 
@@ -135,6 +141,12 @@ app.use('/api/documents', documents);
 app.use('/api/data-room', dataRoom);
 app.use('/api/board-reports', boardReports);
 app.use('/api/executive', executive);
+app.use('/api/risk', risk);
+app.use('/api/forecast', forecast);
+app.use('/api/simulator', simulator);
+app.use('/api/farm-visits', farmVisits);
+app.use('/api/notifications', notifications);
+app.use('/api/geography', geography);
 
 // Central error handler — catches anything thrown from asyncH-wrapped routes.
 // eslint-disable-next-line no-unused-vars

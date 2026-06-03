@@ -24,6 +24,13 @@ import Documents from './components/Documents.jsx';
 import DataRoom from './components/DataRoom.jsx';
 import BoardReports from './components/BoardReports.jsx';
 import ExecutiveDashboard from './components/ExecutiveDashboard.jsx';
+import RiskDashboard from './components/RiskDashboard.jsx';
+import TreasuryForecast from './components/TreasuryForecast.jsx';
+import RoiSimulator from './components/RoiSimulator.jsx';
+import FarmVisits from './components/FarmVisits.jsx';
+import NotificationBell from './components/NotificationBell.jsx';
+import Timeline from './components/Timeline.jsx';
+import Geography from './components/Geography.jsx';
 import Login from './components/Login.jsx';
 import InstallPrompt from './components/InstallPrompt.jsx';
 import { WalletBadge } from './components/ConnectWallet.jsx';
@@ -55,9 +62,11 @@ const NAV = [
     items: [
       { id: 'investors',    label: 'Investors',    subtitle: 'Onboard investors, fund wallets',     icon: IconUsers,     roles: ['admin'] },
       { id: 'projects',     label: 'Projects',     subtitle: 'Crops, allocation, lifecycle',         icon: IconLeaf,      roles: ['admin'] },
+      { id: 'geography',    label: 'Geography',    subtitle: 'Multi-country portfolio rollup',       icon: IconHome,      roles: ['admin'] },
       { id: 'farmers',      label: 'Farmers',      subtitle: 'Recipients of project payouts',        icon: IconTractor,   roles: ['admin'] },
       { id: 'payouts',      label: 'Payouts',      subtitle: 'Project → farmer disbursements',       icon: IconArrowDown, roles: ['admin'] },
-      { id: 'revenue',      label: 'Revenue',      subtitle: 'Inflows from buyers and markets',      icon: IconArrowUp,   roles: ['admin'] }
+      { id: 'revenue',      label: 'Revenue',      subtitle: 'Inflows from buyers and markets',      icon: IconArrowUp,   roles: ['admin'] },
+      { id: 'farm-visits',  label: 'Farm Visits',  subtitle: 'On-site inspections & field reports',  icon: IconTractor,   roles: ['admin'] }
     ]
   },
   {
@@ -73,6 +82,9 @@ const NAV = [
     section: 'Governance',
     items: [
       { id: 'executive',  label: 'Executive',  subtitle: 'Governance scores & risk',             icon: IconReport, roles: ['admin'] },
+      { id: 'risk',       label: 'Risk',       subtitle: 'Concentration, liquidity & heatmap',   icon: IconReport, roles: ['admin'] },
+      { id: 'forecast',   label: 'Forecasting', subtitle: '30/90/365-day liquidity forecast',    icon: IconArrowUp, roles: ['admin'] },
+      { id: 'simulator',  label: 'ROI Simulator', subtitle: 'Model investor returns & scenarios', icon: IconShare, roles: ['admin'] },
       { id: 'governance', label: 'Approvals',  subtitle: 'Pending approvals & history',          icon: IconAudit, roles: ['admin'] },
       { id: 'milestones', label: 'Milestones', subtitle: 'Milestone-based capital release',      icon: IconList,  roles: ['admin'] }
     ]
@@ -92,6 +104,7 @@ const NAV = [
       { id: 'yields',        label: 'Yield Reporting', subtitle: 'Expected vs actual crop yields',     icon: IconLeaf,   roles: ['admin'] },
       { id: 'transactions',  label: 'Transactions',  subtitle: 'Unified ledger of all flows',         icon: IconList,   roles: ['admin'] },
       { id: 'distributions', label: 'Distributions', subtitle: 'Profit splits to investors',          icon: IconShare,  roles: ['admin'] },
+      { id: 'timeline',      label: 'Timeline',      subtitle: 'Visual capital lifecycle',           icon: IconList,   roles: ['admin'] },
       { id: 'activity',      label: 'Activity Log',  subtitle: 'Audit trail of all actions',         icon: IconAudit,  roles: ['admin'] },
       { id: 'reports',       label: 'Reports',       subtitle: 'Summaries with JSON export',          icon: IconReport, roles: ['admin'] }
     ]
@@ -103,6 +116,7 @@ const INVESTOR_NAV = [
     section: 'Portfolio',
     items: [
       { id: 'investor-dashboard', label: 'My Portfolio', subtitle: 'Your investments, returns, and projects', icon: IconUser, roles: ['investor'] },
+      { id: 'simulator', label: 'ROI Simulator', subtitle: 'Model your projected returns', icon: IconShare, roles: ['investor'] },
       { id: 'data-room', label: 'Data Room', subtitle: 'Your statements, reports & documents', icon: IconVault, roles: ['investor'] },
       { id: 'investor-confidence', label: 'Investor Confidence', subtitle: 'Institutional-readiness signals', icon: IconReport, roles: ['investor'] }
     ]
@@ -138,6 +152,7 @@ function Shell({ user, logout }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [liveTick, setLiveTick] = useState(null);
+  const [notifTick, setNotifTick] = useState(0);
   const refresh = () => setRefreshKey(k => k + 1);
 
   // Debounce burst events (e.g. a distribution run that writes 20 rows)
@@ -153,6 +168,7 @@ function Shell({ user, logout }) {
   }
 
   useEventStream((event) => {
+    if (event?.type === 'notification') { setNotifTick(t => t + 1); return; }
     if (event?.type !== 'activity') return;
     if (SILENT_ACTIONS.has(event.actionType)) return;
     scheduleRefresh();
@@ -250,6 +266,7 @@ function Shell({ user, logout }) {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <NotificationBell liveTick={notifTick} />
               <WalletBadge />
               <LiveBadge tick={liveTick} />
               <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-200">
@@ -274,6 +291,8 @@ function Shell({ user, logout }) {
           {tab === 'farmers'        && isAdmin && <Farmers refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'payouts'        && isAdmin && <Payouts refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'revenue'        && isAdmin && <Revenue refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'farm-visits'    && isAdmin && <FarmVisits refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'geography'      && isAdmin && <Geography refreshKey={refreshKey} />}
           {tab === 'buyers'         && isAdmin && <Buyers refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'offtake'        && isAdmin && <Offtake refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'deliveries'     && isAdmin && <Deliveries refreshKey={refreshKey} onChange={refresh} />}
@@ -281,14 +300,18 @@ function Shell({ user, logout }) {
           {tab === 'kpi'            && isAdmin && <KpiDashboard refreshKey={refreshKey} />}
           {tab === 'yields'         && isAdmin && <Yields refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'executive'      && isAdmin && <ExecutiveDashboard refreshKey={refreshKey} />}
+          {tab === 'risk'           && isAdmin && <RiskDashboard refreshKey={refreshKey} />}
+          {tab === 'forecast'       && isAdmin && <TreasuryForecast refreshKey={refreshKey} />}
           {tab === 'governance'     && isAdmin && <Governance refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'milestones'     && isAdmin && <Milestones refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'documents'      && isAdmin && <Documents refreshKey={refreshKey} onChange={refresh} />}
           {tab === 'board-reports'  && isAdmin && <BoardReports refreshKey={refreshKey} />}
           {tab === 'distributions'  && isAdmin && <Distributions refreshKey={refreshKey} onChange={refresh} />}
+          {tab === 'timeline'       && isAdmin && <Timeline refreshKey={refreshKey} />}
           {tab === 'activity'       && isAdmin && <Activity refreshKey={refreshKey} />}
           {tab === 'reports'        && isAdmin && <Reports refreshKey={refreshKey} />}
           {/* Shared */}
+          {tab === 'simulator' && <RoiSimulator />}
           {tab === 'data-room' && <DataRoom refreshKey={refreshKey} isAdmin={isAdmin} />}
           {tab === 'investor-confidence' && <InvestorConfidence refreshKey={refreshKey} />}
           {tab === 'investor-dashboard' && (

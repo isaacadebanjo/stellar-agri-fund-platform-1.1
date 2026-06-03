@@ -8,17 +8,30 @@ import AmountModal from './AmountModal.jsx';
 
 const STATUSES = ['active', 'paused', 'completed', 'cancelled'];
 
+const EMPTY_FORM = {
+  name: '', description: '', cropType: '', status: 'active', startDate: '', endDate: '',
+  hectares: '', country: '', region: '', currency: ''
+};
+
 export default function Projects({ refreshKey, onChange }) {
   const [projects, setProjects] = useState([]);
-  const [form, setForm] = useState({
-    name: '', description: '', cropType: '', status: 'active', startDate: '', endDate: '', hectares: ''
-  });
+  const [countries, setCountries] = useState([]);
+  const [form, setForm] = useState(EMPTY_FORM);
   const [err, setErr] = useState('');
   // The project currently being allocated to — drives the amount-entry modal.
   const [allocateProject, setAllocateProject] = useState(null);
 
   const load = () => api.projects.list().then(setProjects).catch(e => setErr(e.message));
   useEffect(() => { load(); }, [refreshKey]);
+  useEffect(() => { api.geography.countries().then(d => setCountries(d.countries || [])).catch(() => {}); }, []);
+
+  const selectedCountry = countries.find(c => c.code === form.country);
+
+  // Picking a country defaults the currency and resets the region.
+  function pickCountry(code) {
+    const c = countries.find(x => x.code === code);
+    setForm(f => ({ ...f, country: code, region: '', currency: c?.currency || '' }));
+  }
 
   async function add(e) {
     e.preventDefault();
@@ -31,9 +44,12 @@ export default function Projects({ refreshKey, onChange }) {
         status: form.status,
         startDate: form.startDate,
         endDate: form.endDate,
-        hectares: Number(form.hectares) || 0
+        hectares: Number(form.hectares) || 0,
+        country: form.country,
+        region: form.region,
+        currency: form.currency
       });
-      setForm({ name: '', description: '', cropType: '', status: 'active', startDate: '', endDate: '', hectares: '' });
+      setForm(EMPTY_FORM);
       setErr('');
       await load(); onChange?.();
     } catch (e) { setErr(e.message); }
@@ -86,6 +102,21 @@ export default function Projects({ refreshKey, onChange }) {
             <Field label="Hectares">
               <Input type="number" min="0" step="0.1" placeholder="0" value={form.hectares} onChange={e => setForm({ ...form, hectares: e.target.value })} />
             </Field>
+            <Field label="Country">
+              <Select value={form.country} onChange={e => pickCountry(e.target.value)}>
+                <option value="">— Unassigned —</option>
+                {countries.map(c => <option key={c.code} value={c.code}>{c.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Region">
+              <Select value={form.region} onChange={e => setForm({ ...form, region: e.target.value })} disabled={!selectedCountry}>
+                <option value="">{selectedCountry ? '— Select region —' : 'Pick a country first'}</option>
+                {selectedCountry?.regions.map(rg => <option key={rg} value={rg}>{rg}</option>)}
+              </Select>
+            </Field>
+            <Field label="Currency">
+              <Input placeholder="e.g. ZAR" value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} />
+            </Field>
           </div>
           <div className="flex items-center justify-end">
             <Button>Create project</Button>
@@ -112,6 +143,7 @@ export default function Projects({ refreshKey, onChange }) {
                 <tr>
                   <th>Name</th>
                   <th>Crop</th>
+                  <th>Location</th>
                   <th>Status</th>
                   <th>Dates</th>
                   <th className="!text-right">Allocated</th>
@@ -130,6 +162,15 @@ export default function Projects({ refreshKey, onChange }) {
                       {p.description && <div className="text-xs text-slate-500 mt-0.5">{p.description}</div>}
                     </td>
                     <td>{p.cropType || <span className="text-slate-400">—</span>}</td>
+                    <td className="text-xs whitespace-nowrap">
+                      {p.country ? (
+                        <span className="text-slate-700">
+                          {(countries.find(c => c.code === p.country)?.name) || p.country}
+                          {p.region && <span className="text-slate-400"> · {p.region}</span>}
+                          {p.currency && <span className="ml-1 text-[10px] uppercase tracking-wider text-slate-400">{p.currency}</span>}
+                        </span>
+                      ) : <span className="text-slate-400">—</span>}
+                    </td>
                     <td>
                       <Select
                         value={p.status || 'active'}

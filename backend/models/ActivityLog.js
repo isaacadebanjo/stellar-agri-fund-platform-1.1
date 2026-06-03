@@ -47,7 +47,12 @@ export const ActivityTypes = {
   DOCUMENT_ARCHIVED: 'DOCUMENT_ARCHIVED',
   DOCUMENT_DOWNLOADED: 'DOCUMENT_DOWNLOADED',
   // Institutional-grade upgrade — Board & Investor Reporting.
-  REPORT_GENERATED: 'REPORT_GENERATED'
+  REPORT_GENERATED: 'REPORT_GENERATED',
+  // Institutional platform — Farm Visit Reports (operational monitoring).
+  CREATE_FARM_VISIT: 'CREATE_FARM_VISIT',
+  UPDATE_FARM_VISIT: 'UPDATE_FARM_VISIT',
+  // Institutional platform — system-generated alert (offtake nearing end date).
+  CONTRACT_EXPIRING: 'CONTRACT_EXPIRING'
 };
 
 // Entity types
@@ -69,7 +74,8 @@ export const EntityTypes = {
   YIELD: 'YIELD',
   APPROVAL: 'APPROVAL',
   MILESTONE: 'MILESTONE',
-  DOCUMENT: 'DOCUMENT'
+  DOCUMENT: 'DOCUMENT',
+  FARM_VISIT: 'FARM_VISIT'
 };
 
 // Status enum

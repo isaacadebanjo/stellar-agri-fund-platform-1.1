@@ -225,6 +225,38 @@ export const api = {
   executive: {
     overview: (params) => request('GET', '/api/executive/overview' + qs(params))
   },
+  // --- Institutional platform: Risk Management ---
+  risk: {
+    overview: () => request('GET', '/api/risk/overview')
+  },
+  // --- Institutional platform: Treasury Forecasting ---
+  forecast: {
+    overview: () => request('GET', '/api/forecast/overview')
+  },
+  // --- Institutional platform: Investor ROI Simulator ---
+  simulator: {
+    baseline: () => request('GET', '/api/simulator/baseline'),
+    roi: (data) => request('POST', '/api/simulator/roi', data)
+  },
+  // --- Institutional platform: Farm Visit Reports ---
+  farmVisits: {
+    list: (params) => request('GET', '/api/farm-visits' + qs(params)),
+    summary: () => request('GET', '/api/farm-visits/summary'),
+    create: (data) => request('POST', '/api/farm-visits', data),
+    update: (id, data) => request('PATCH', `/api/farm-visits/${id}`, data)
+  },
+  // --- Institutional platform: Notification Center ---
+  notifications: {
+    list: (params) => request('GET', '/api/notifications' + qs(params)),
+    unreadCount: () => request('GET', '/api/notifications/unread-count'),
+    markRead: (id) => request('POST', `/api/notifications/${id}/read`),
+    markAllRead: () => request('POST', '/api/notifications/read-all')
+  },
+  // --- Institutional platform: Multi-Country Support ---
+  geography: {
+    countries: () => request('GET', '/api/geography/countries'),
+    overview: () => request('GET', '/api/geography/overview')
+  },
   revenue: {
     list: (projectId) => request('GET', '/api/revenue' + (projectId ? `?projectId=${projectId}` : '')),
     create: (data) => request('POST', '/api/revenue', data)

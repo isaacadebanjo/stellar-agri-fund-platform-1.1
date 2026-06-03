@@ -5,8 +5,20 @@ import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
 import { round, sub } from '../services/money.js';
 import { closureGate } from '../middleware/governance.js';
-import { nonEmptyString, optionalIsoDate, nonNegativeNumber } from '../services/validate.js';
+import { nonEmptyString, optionalIsoDate, nonNegativeNumber, optionalString } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
+import { isValidCountry, defaultCurrency } from '../services/countries.js';
+
+// Validate an optional ISO country code against the supported taxonomy.
+function validateCountry(code) {
+  const c = optionalString(code);
+  if (c && !isValidCountry(c)) {
+    const err = new Error(`country must be one of the supported markets (got "${c}")`);
+    err.httpStatus = 400;
+    throw err;
+  }
+  return c;
+}
 
 const r = Router();
 
@@ -26,6 +38,9 @@ function enrich(p, revenue) {
     allocated: p.allocated,
     spent: p.spent,
     hectares: p.hectares || 0,
+    country: p.country || '',
+    region: p.region || '',
+    currency: p.currency || '',
     governanceEnabled: Boolean(p.governanceEnabled),
     createdAt: p.createdAt,
     paidOut: p.spent,
@@ -55,6 +70,9 @@ r.post('/', asyncH(async (req, res) => {
   optionalIsoDate(startDate, 'startDate');
   optionalIsoDate(endDate, 'endDate');
   const hectares = req.body?.hectares === undefined ? 0 : nonNegativeNumber(req.body.hectares, 'hectares');
+  const country = validateCountry(req.body?.country);
+  // Default the reporting currency from the country when not explicitly given.
+  const currency = optionalString(req.body?.currency) || defaultCurrency(country);
   const project = await Project.create({
     name,
     description: description || '',
@@ -63,6 +81,9 @@ r.post('/', asyncH(async (req, res) => {
     startDate: startDate || '',
     endDate: endDate || '',
     hectares,
+    country,
+    region: optionalString(req.body?.region),
+    currency,
     governanceEnabled: Boolean(req.body?.governanceEnabled)
   });
 
@@ -88,7 +109,7 @@ r.post('/', asyncH(async (req, res) => {
 // Update project fields (status, dates, crop, etc.). closureGate only engages
 // when status moves to completed/cancelled AND closure approval is enabled.
 r.patch('/:id', closureGate, asyncH(async (req, res) => {
-  const allowed = ['name', 'description', 'cropType', 'status', 'startDate', 'endDate', 'hectares', 'governanceEnabled'];
+  const allowed = ['name', 'description', 'cropType', 'status', 'startDate', 'endDate', 'hectares', 'country', 'region', 'currency', 'governanceEnabled'];
   const update = {};
   for (const k of allowed) {
     if (req.body && req.body[k] !== undefined) update[k] = req.body[k];
@@ -96,6 +117,9 @@ r.patch('/:id', closureGate, asyncH(async (req, res) => {
   if (update.startDate !== undefined) optionalIsoDate(update.startDate, 'startDate');
   if (update.endDate !== undefined) optionalIsoDate(update.endDate, 'endDate');
   if (update.hectares !== undefined) update.hectares = nonNegativeNumber(update.hectares, 'hectares');
+  if (update.country !== undefined) update.country = validateCountry(update.country);
+  if (update.region !== undefined) update.region = optionalString(update.region);
+  if (update.currency !== undefined) update.currency = optionalString(update.currency);
   if (update.governanceEnabled !== undefined) update.governanceEnabled = Boolean(update.governanceEnabled);
   const project = await Project.findByIdAndUpdate(req.params.id, update, {
     new: true,

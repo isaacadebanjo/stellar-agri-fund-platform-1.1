@@ -1,5 +1,6 @@
 import ActivityLog, { ActivityTypes, EntityTypes, ActivityStatus } from '../models/ActivityLog.js';
 import { broadcast } from './eventBus.js';
+import { notifyFromActivity } from './notify.js';
 
 function broadcastActivity(doc) {
   broadcast({
@@ -59,6 +60,7 @@ export async function logActivity({
           metadata: metadata || null
         });
         broadcastActivity(doc);
+        notifyFromActivity(doc).catch(e => console.error('[Notify] failed:', e.message));
       } catch (err) {
         console.error('[ActivityLog] Failed to create log:', err.message);
       }
@@ -95,6 +97,7 @@ export async function logActivitySync({
     metadata: metadata || null
   });
   broadcastActivity(doc);
+  notifyFromActivity(doc).catch(e => console.error('[Notify] failed:', e.message));
   return doc;
 }
 

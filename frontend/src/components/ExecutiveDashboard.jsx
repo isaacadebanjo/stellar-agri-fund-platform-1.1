@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import {
+  ComposedChart, Bar, Line, LineChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
+} from 'recharts';
 import { api } from '../api.js';
 import { Section, StatCard, Cards, Badge, Empty, ErrorBanner, fmt } from './ui.jsx';
 import HistoricalFlows from './HistoricalFlows.jsx';
+
+const readinessKind = (band) =>
+  band === 'Investment Ready' ? 'paid' : band === 'Developing' ? 'pending' : 'neutral';
 
 // Coloured score bar (0–100).
 function ScoreBar({ label, value, sub }) {
@@ -47,10 +53,38 @@ export default function ExecutiveDashboard({ refreshKey }) {
         <ErrorBanner>{err}</ErrorBanner>
         {data && (
           <>
+            {data.executiveSummary && (
+              <div className="mb-5 rounded-xl border border-slate-200 bg-gradient-to-br from-brand-50/60 to-white p-5">
+                <div className="flex items-start justify-between gap-3 mb-2">
+                  <h3 className="text-sm font-semibold text-slate-900">Executive Summary</h3>
+                  {data.readinessBand && (
+                    <Badge kind={readinessKind(data.readinessBand)}>
+                      {data.readinessBand} · {data.investmentReadinessScore}/100
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm text-slate-700 leading-relaxed">{data.executiveSummary.headline}</p>
+                {data.executiveSummary.highlights?.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {data.executiveSummary.highlights.map((h, i) => (
+                      <span key={i} className="text-[11px] font-medium text-slate-600 bg-white ring-1 ring-slate-200 rounded-full px-2.5 py-1">{h}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <Cards cols={4}>
+              <StatCard label="Investment Readiness" value={`${data.investmentReadinessScore ?? '—'}`} sub={data.readinessBand} accent="SCORE" />
+              <StatCard label="Capital Deployed" value={fmt(data.capitalDeployed ?? 0)} sub={`${data.capitalUtilizationPercent}% utilization`} />
+              <StatCard label="Contracted Revenue" value={fmt(data.contractedRevenue ?? 0)} sub={`${data.activeContracts} active contracts`} />
+              <StatCard label="Treasury Health" value={<Badge kind={healthKind(data.treasuryHealth)}>{data.treasuryHealth}</Badge>} sub={fmt(data.availableLiquidity) + ' available'} />
+            </Cards>
+
             <Cards cols={4}>
               <StatCard label="Pending Approvals" value={data.pendingApprovals} sub="awaiting sign-off" accent={data.pendingApprovals ? 'ACTION' : undefined} />
               <StatCard label="Capital Utilization" value={`${data.capitalUtilizationPercent}%`} sub="allocated vs invested" />
-              <StatCard label="Treasury Health" value={<Badge kind={healthKind(data.treasuryHealth)}>{data.treasuryHealth}</Badge>} sub={fmt(data.availableLiquidity) + ' available'} />
+              <StatCard label="Total Distributed" value={fmt(data.totalDistributed)} sub="to investors" />
               <StatCard label="Active Contracts" value={data.activeContracts} sub={`${data.buyerVerification.verified}/${data.buyerVerification.total} buyers verified`} />
             </Cards>
 
@@ -83,6 +117,36 @@ export default function ExecutiveDashboard({ refreshKey }) {
           </div>
         )}
       </Section>
+
+      {data?.monthlyTrends?.length > 0 && (
+        <Section title="Revenue & Profit Trends" subtitle="Monthly revenue and profit over the last 6 months.">
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={data.monthlyTrends} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+              <YAxis tick={{ fontSize: 12 }} stroke="#94a3b8" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+              <Tooltip formatter={(v) => fmt(v)} />
+              <Legend />
+              <Bar dataKey="revenue" fill="#10b981" name="Revenue" radius={[4, 4, 0, 0]} />
+              <Line type="monotone" dataKey="profit" stroke="#0ea5e9" strokeWidth={3} dot={false} name="Profit" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </Section>
+      )}
+
+      {data?.monthlyTrends?.length > 0 && (
+        <Section title="Yield Performance Trend" subtitle="Actual vs expected yield, by harvest month (%).">
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={data.monthlyTrends} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <XAxis dataKey="month" tick={{ fontSize: 12 }} stroke="#94a3b8" />
+              <YAxis domain={[0, 'auto']} tick={{ fontSize: 12 }} stroke="#94a3b8" tickFormatter={(v) => `${v}%`} />
+              <Tooltip formatter={(v) => `${v}%`} />
+              <Line type="monotone" dataKey="yieldPerformance" stroke="#047857" strokeWidth={2.5} dot name="Yield Performance" />
+            </LineChart>
+          </ResponsiveContainer>
+        </Section>
+      )}
 
       <HistoricalFlows data={data?.trends} loading={loading} />
     </>

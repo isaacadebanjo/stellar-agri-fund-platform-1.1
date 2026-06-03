@@ -7,6 +7,8 @@ import Invoice from '../models/Invoice.js';
 import Distribution from '../models/Distribution.js';
 import ApprovalRequest from '../models/ApprovalRequest.js';
 import Milestone from '../models/Milestone.js';
+import Revenue from '../models/Revenue.js';
+import Transaction from '../models/Transaction.js';
 import DocumentModel, { DOCUMENT_CATEGORIES } from '../models/Document.js';
 import { getTreasuryOverview, getTreasuryFlows } from '../services/treasuryAnalytics.js';
 import { asyncH } from './_async.js';
@@ -17,6 +19,47 @@ const r = Router();
 r.use(requireRole('admin'));
 
 const clamp100 = (n) => Math.max(0, Math.min(100, Math.round(n)));
+const fmtXlm = (n) => `${round(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} XLM`;
+
+// Monthly revenue / profit / yield-performance over the last `months` months —
+// powers the executive trend charts. Profit = revenue − farmer payouts in period.
+async function buildMonthlyTrends(months = 6) {
+  const now = new Date();
+  const buckets = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i + 1, 1));
+    buckets.push({ start, end, label: start.toISOString().slice(0, 7) });
+  }
+  const earliest = buckets[0].start;
+
+  const [revenues, payouts, yields] = await Promise.all([
+    Revenue.find({ timestamp: { $gte: earliest } }).lean(),
+    Transaction.find({ stage: 'payout', status: 'success', timestamp: { $gte: earliest } }).lean(),
+    Yield.find().lean()
+  ]);
+
+  return buckets.map(b => {
+    const revenue = round(sum(revenues.filter(r => {
+      const t = new Date(r.timestamp); return t >= b.start && t < b.end;
+    }), r => r.amount));
+    const payout = round(sum(payouts.filter(p => {
+      const t = new Date(p.timestamp); return t >= b.start && t < b.end;
+    }), p => p.amount));
+    const monthYields = yields.filter(y => {
+      if (!y.harvestDate) return false;
+      const d = new Date(y.harvestDate); return d >= b.start && d < b.end;
+    });
+    const exp = sum(monthYields, y => y.expectedYield);
+    const act = sum(monthYields, y => y.actualYield);
+    return {
+      month: b.label,
+      revenue,
+      profit: round(revenue - payout),
+      yieldPerformance: exp > 0 ? round((act / exp) * 100) : 0
+    };
+  });
+}
 
 // Executive governance dashboard: a single snapshot of platform health plus a
 // treasury trend series for charts. Composed from the same building blocks the
@@ -82,6 +125,14 @@ r.get('/overview', asyncH(async (req, res) => {
   // one active document on file.
   const reportingComplianceScore = clamp100((docCategories.length / DOCUMENT_CATEGORIES.length) * 100);
 
+  // Investment Readiness Score: the headline composite an investment committee
+  // looks at — confidence, governance and reporting discipline together.
+  const investmentReadinessScore = clamp100(
+    (investorConfidenceScore + governanceScore + reportingComplianceScore) / 3
+  );
+  const readinessBand = investmentReadinessScore >= 75 ? 'Investment Ready'
+    : investmentReadinessScore >= 50 ? 'Developing' : 'Early Stage';
+
   // --- Risk alerts ---
   const riskAlerts = [];
   if (overview.liquidityHealth !== 'Healthy') {
@@ -93,22 +144,47 @@ r.get('/overview', asyncH(async (req, res) => {
   if (buyers.length && buyerVerificationRate < 50) riskAlerts.push({ level: 'medium', label: `Only ${buyerVerificationRate}% of buyers verified` });
   if (reportingComplianceScore < 50) riskAlerts.push({ level: 'low', label: `Reporting compliance at ${reportingComplianceScore}%` });
 
+  // Contracted revenue: total value of active/completed offtake agreements.
+  const contractedRevenue = round(sum(contracts, c => c.contractValue || 0));
+  const activeProjects = projects.filter(p => p.status === 'active').length;
+  const monthlyTrends = await buildMonthlyTrends(6);
+
+  // Executive summary: a board-ready narrative plus the headline figures.
+  const executiveSummary = {
+    headline:
+      `The platform is ${readinessBand.toLowerCase()} (readiness ${investmentReadinessScore}/100), ` +
+      `with ${fmtXlm(overview.totalAllocatedCapital)} deployed across ${activeProjects} active project(s), ` +
+      `${fmtXlm(contractedRevenue)} in contracted revenue and treasury liquidity rated ${overview.liquidityHealth}.`,
+    highlights: [
+      `${overview.capitalUtilizationPercent}% capital utilization`,
+      `${buyerVerificationRate}% of buyers verified`,
+      `${yieldPerformancePercent}% yield performance`,
+      `${roiPercent}% realised ROI`
+    ]
+  };
+
   res.json({
     pendingApprovals,
     capitalUtilizationPercent: overview.capitalUtilizationPercent,
     treasuryHealth: overview.liquidityHealth,
     treasuryBalance: overview.treasuryBalance,
     availableLiquidity: overview.availableLiquidity,
+    capitalDeployed: overview.totalAllocatedCapital,
+    contractedRevenue,
     investorConfidenceScore,
     governanceScore,
     reportingComplianceScore,
+    investmentReadinessScore,
+    readinessBand,
     activeContracts: contracts.length,
     buyerVerification: { verified: verifiedBuyers, total: buyers.length, rate: buyerVerificationRate },
     outstandingPayments,
     roiPercent,
     totalDistributed,
+    executiveSummary,
     riskAlerts,
-    trends: flows
+    trends: flows,
+    monthlyTrends
   });
 }));
 
