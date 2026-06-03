@@ -5,6 +5,7 @@ import Buyer from '../models/Buyer.js';
 import Project from '../models/Project.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { offtakeApprovalGate } from '../middleware/governance.js';
 import { paginate, listResponse } from '../services/pagination.js';
 import { round, mul, sum } from '../services/money.js';
 import { nonEmptyString, id, optionalString, nonNegativeNumber, enumValue, optionalIsoDate } from '../services/validate.js';
@@ -74,7 +75,7 @@ r.get('/', asyncH(async (req, res) => {
   res.json(pg ? listResponse(rows, total, pg) : rows);
 }));
 
-r.post('/', asyncH(async (req, res) => {
+r.post('/', offtakeApprovalGate, asyncH(async (req, res) => {
   const agreementNumber = nonEmptyString(req.body?.agreementNumber, 'agreementNumber');
   const buyerId = id(req.body?.buyerId, 'buyerId');
   const projectId = id(req.body?.projectId, 'projectId');

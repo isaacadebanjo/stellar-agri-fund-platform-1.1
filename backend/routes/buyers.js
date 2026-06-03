@@ -3,6 +3,7 @@ import Buyer, { BUYER_STATUSES, VERIFICATION_STATUSES } from '../models/Buyer.js
 import OfftakeAgreement from '../models/OfftakeAgreement.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { buyerVerificationGate } from '../middleware/governance.js';
 import { paginate, listResponse } from '../services/pagination.js';
 import { sum } from '../services/money.js';
 import { nonEmptyString, optionalString, optionalEmail, optionalPhone, enumValue } from '../services/validate.js';
@@ -76,7 +77,7 @@ r.post('/', asyncH(async (req, res) => {
   res.status(201).json(buyer.toJSON());
 }));
 
-r.patch('/:id', asyncH(async (req, res) => {
+r.patch('/:id', buyerVerificationGate, asyncH(async (req, res) => {
   const update = {};
   if (req.body?.name !== undefined) update.name = nonEmptyString(req.body.name, 'name');
   if (req.body?.company !== undefined) update.company = optionalString(req.body.company);

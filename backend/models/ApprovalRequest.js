@@ -1,7 +1,16 @@
 import mongoose from 'mongoose';
 import { baseSchemaOptions, idField } from './_base.js';
 
-export const APPROVAL_ACTION_TYPES = ['allocation', 'payout', 'distribution', 'project_closure'];
+export const APPROVAL_ACTION_TYPES = [
+  'allocation',
+  'payout',
+  'distribution',
+  'project_closure',
+  // Institutional-grade upgrade — extended approval actions (opt-in via env).
+  'revenue_adjustment',
+  'buyer_verification',
+  'offtake_approval'
+];
 export const APPROVAL_STATUSES = ['pending', 'approved', 'rejected'];
 
 // A governance approval request for a sensitive action that exceeded its

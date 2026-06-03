@@ -35,6 +35,10 @@ import kpi from './routes/kpi.js';
 import investorConfidence from './routes/investorConfidence.js';
 import governance from './routes/governance.js';
 import milestones from './routes/milestones.js';
+import documents from './routes/documents.js';
+import dataRoom from './routes/dataRoom.js';
+import boardReports from './routes/boardReports.js';
+import executive from './routes/executive.js';
 
 const app = express();
 
@@ -127,6 +131,10 @@ app.use('/api/kpi', kpi);
 app.use('/api/investor-confidence', investorConfidence);
 app.use('/api/governance', governance);
 app.use('/api/milestones', milestones);
+app.use('/api/documents', documents);
+app.use('/api/data-room', dataRoom);
+app.use('/api/board-reports', boardReports);
+app.use('/api/executive', executive);
 
 // Central error handler — catches anything thrown from asyncH-wrapped routes.
 // eslint-disable-next-line no-unused-vars

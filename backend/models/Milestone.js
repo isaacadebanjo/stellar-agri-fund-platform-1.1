@@ -16,7 +16,16 @@ const MilestoneSchema = new mongoose.Schema({
   completionPercent: { type: Number, default: 0, min: 0, max: 100 },
   releaseAmount: { type: Number, default: 0, min: 0 },
   // Verification documents — stored as references (name + URL), no file upload.
+  // Kept for back-compat; richer evidence lives in `documents`/`photos` below.
   verificationDocs: { type: [{ name: String, url: String }], default: [] },
+  // Evidence-based milestone tracking (institutional-grade upgrade). Additive —
+  // all optional, so existing milestones are unaffected.
+  completionDate: { type: String, default: '' },         // ISO date string, like targetDate
+  gpsNotes: { type: String, default: '' },               // free-text GPS / location notes
+  verificationNotes: { type: String, default: '' },      // reviewer's verification notes
+  // Attached managed documents + site photos (references to Document records).
+  documents: { type: [{ documentId: String, title: String, fileName: String }], default: [] },
+  photos: { type: [{ documentId: String, title: String, fileName: String }], default: [] },
   approvalStatus: { type: String, enum: MILESTONE_STATUSES, default: 'pending', index: true },
   approvedBy: { type: String, default: null },
   decisionAt: { type: Date, default: null }

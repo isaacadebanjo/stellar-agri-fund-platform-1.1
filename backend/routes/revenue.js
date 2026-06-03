@@ -3,6 +3,7 @@ import Revenue from '../models/Revenue.js';
 import Project from '../models/Project.js';
 import { asyncH } from './_async.js';
 import { requireRole } from '../middleware/auth.js';
+import { revenueAdjustmentGate } from '../middleware/governance.js';
 import { amount, id } from '../services/validate.js';
 import { logActivity, ActivityTypes, EntityTypes, ActivityStatus } from '../services/activityLog.js';
 
@@ -23,7 +24,7 @@ r.get('/', asyncH(async (req, res) => {
   })));
 }));
 
-r.post('/', asyncH(async (req, res) => {
+r.post('/', revenueAdjustmentGate, asyncH(async (req, res) => {
   const projectId = id(req.body?.projectId, 'projectId');
   const value = amount(req.body?.amount);
   const source = typeof req.body?.source === 'string' ? req.body.source.trim() : '';

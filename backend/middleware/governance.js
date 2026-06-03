@@ -112,6 +112,41 @@ export const closureGate = governanceGate((req) => {
   };
 });
 
+// Revenue adjustments (flag-gated — recording revenue requires approval when on).
+export const revenueAdjustmentGate = governanceGate((req) => {
+  const amount = Number(req.body?.amount) || 0;
+  const ref = req.body?.projectId || '';
+  return {
+    gated: flag('GOVERNANCE_REVENUE_ADJUSTMENT_REQUIRES_APPROVAL'),
+    actionType: 'revenue_adjustment', amount, ref,
+    key: `revenue_adjustment:${ref}:${amount}:${req.body?.source || ''}`,
+    summary: `Record revenue ${amount} XLM for project ${ref}`
+  };
+});
+
+// Buyer verification (flag-gated — only when verificationStatus moves to verified).
+export const buyerVerificationGate = governanceGate((req) => {
+  const verifying = req.body?.verificationStatus === 'verified';
+  const ref = req.params?.id || '';
+  return {
+    gated: verifying && flag('GOVERNANCE_BUYER_VERIFICATION_REQUIRES_APPROVAL'),
+    actionType: 'buyer_verification', amount: 0, ref,
+    key: `buyer_verification:${ref}`,
+    summary: `Verify buyer ${ref}`
+  };
+});
+
+// Offtake agreement approval (flag-gated — creating/activating an agreement).
+export const offtakeApprovalGate = governanceGate((req) => {
+  const ref = req.body?.agreementNumber || req.params?.id || '';
+  return {
+    gated: flag('GOVERNANCE_OFFTAKE_APPROVAL_REQUIRES_APPROVAL'),
+    actionType: 'offtake_approval', amount: Number(req.body?.contractValue) || 0, ref,
+    key: `offtake_approval:${ref}:${req.body?.buyerId || ''}:${req.body?.projectId || ''}`,
+    summary: `Approve offtake agreement ${ref}`
+  };
+});
+
 // Milestone-based capital release: when a project has governanceEnabled, cap
 // total allocations at the sum of approved milestones' releaseAmount.
 export const milestoneAllocationGate = asyncH(async (req, res, next) => {
